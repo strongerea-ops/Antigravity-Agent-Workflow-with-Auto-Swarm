@@ -1,6 +1,6 @@
 {
   "schema_version": "1.2.0",
-  "saved_at": "2026-11-20T00:00:00+00:00",
+  "saved_at": "2026-11-20T00:00:00.000000Z",
   "project": "{{PROJECT_NAME}}",
   "active_objective": "Initialize portable agent workflow and fill project placeholders",
   "status": "TEMPLATE_READY",

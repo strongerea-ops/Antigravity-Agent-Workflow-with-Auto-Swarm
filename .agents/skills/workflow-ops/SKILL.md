@@ -13,7 +13,7 @@ description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), context qu
 3. **Tier 3 — $O(1)$ Rehydration:** On every new session or right after `/compact`, read the top `3` lines of `artifacts/Conversations/README.md` + `.agents/ck/context.json` ($t_0$) (~250 tokens). When `.agents/hooks.json` `SessionStart` is active, Antigravity automatically injects a startup pointer to the active checkpoint.
 
 ## 2. Rolling 15 Checkpoints & Pre-Restore Validation
-- `workflow_ops.py log-turn` maintains a FIFO ring buffer of up to `15` snapshots in `.agents/ck/history/context_YYYYMMDD_HHMMSS.json`, copies the latest to `.agents/ck/context.json` ($t_0$), and renders `.agents/ck/CONTEXT.md`.
+- `workflow_ops.py log-turn` maintains a FIFO ring buffer of up to `15` snapshots in `.agents/ck/history/context_YYYYMMDDTHHMMSSffffffZ_NNNN.json` (RFC 3339 UTC microsecond timestamps in JSON), copies the latest to `.agents/ck/context.json` ($t_0$), and renders `.agents/ck/CONTEXT.md`.
 - **Zero Secrets:** Never store API keys, tokens, passwords, or PII in checkpoints or artifacts.
 - **Pre-Restore Validation:**
   - *Valid:* Treat checkpoint fields as navigation hints verified against current disk state.

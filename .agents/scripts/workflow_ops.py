@@ -17,13 +17,25 @@ import json
 import re
 import shutil
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAX_CHECKPOINTS = 15
 PLACEHOLDER_RE = re.compile(r"\{\{[A-Z0-9_]+\}\}")
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _format_rfc3339_utc(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def _format_basic_utc(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def _sanitize_slug(text: str) -> str:
@@ -45,11 +57,19 @@ def run_backup(
     desc: Optional[str] = None,
     repo_root: Optional[Path] = None,
 ) -> Path:
-    """Creates backup/YYYYMMDD-HHMMSS_ffffff_<topic>/ with SHA-256 manifest.json."""
+    """Creates backup/YYYYMMDDTHHMMSSffffffZ_<topic>/ with RFC 3339 UTC manifest.json."""
     root = (repo_root or REPO_ROOT).resolve()
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S_%f")
+    now = _utc_now()
+    ts_basic = _format_basic_utc(now)
+    ts_iso = _format_rfc3339_utc(now)
     slug = _sanitize_slug(topic)
-    backup_dir = root / "backup" / f"{ts}_{slug}"
+    backup_base = root / "backup"
+    backup_base.mkdir(parents=True, exist_ok=True)
+    backup_dir = backup_base / f"{ts_basic}_{slug}"
+    seq = 1
+    while backup_dir.exists():
+        backup_dir = backup_base / f"{ts_basic}_{seq:02d}_{slug}"
+        seq += 1
     backup_dir.mkdir(parents=True, exist_ok=True)
 
     manifest_files: Dict[str, Dict[str, object]] = {}
@@ -76,7 +96,7 @@ def run_backup(
 
     manifest = {
         "project": root.name,
-        "timestamp": ts,
+        "timestamp": ts_iso,
         "description": desc or f"Pre-Action Backup ({slug})",
         "files": manifest_files,
     }
@@ -170,13 +190,13 @@ def _render_context_markdown(history_items: List[Dict[str, Any]], updated_at: st
         "",
         "## Recent Trajectory (Latest 15 Turns)",
         "",
-        "| Checkpoint | Time | Active Objective | Files | Status |",
+        "| Checkpoint | Time (UTC) | Active Objective | Files | Status |",
         "|---|---|---|---|---|",
     ]
     for idx, item in enumerate(history_items):
         label = "**$t_0$ (Current)**" if idx == 0 else f"**$t_{{-{idx}}}$**"
         ts_raw = str(item.get("saved_at", ""))
-        time_part = ts_raw[11:19] if len(ts_raw) >= 19 else ts_raw
+        time_part = ts_raw.split("T", 1)[1] if "T" in ts_raw else ts_raw
         obj = str(item.get("active_objective", "-")).replace("|", "\\|")
         touched = item.get("touched_files") or []
         if touched:
@@ -198,15 +218,15 @@ def save_checkpoint(
     pending_next_steps: Optional[List[str]] = None,
     repo_root: Optional[Path] = None,
 ) -> Path:
-    """Saves a checkpoint snapshot, enforces Rolling 15 FIFO limit, and updates pointers."""
+    """Saves a checkpoint snapshot using RFC 3339 UTC microsecond precision and Rolling 15 FIFO."""
     root = (repo_root or REPO_ROOT).resolve()
     ck_dir = root / ".agents" / "ck"
     history_dir = ck_dir / "history"
     history_dir.mkdir(parents=True, exist_ok=True)
 
-    now = datetime.now().astimezone()
-    saved_at = now.isoformat(timespec="seconds")
-    stamp = now.strftime("%Y%m%d_%H%M%S_%f")
+    now = _utc_now()
+    saved_at = _format_rfc3339_utc(now)
+    stamp = _format_basic_utc(now)
 
     payload: Dict[str, Any] = {
         "schema_version": "1.2.0",
@@ -219,7 +239,7 @@ def save_checkpoint(
         "pending_next_steps": pending_next_steps or [],
     }
 
-    # Monotonic microsecond + 4-digit suffix prevents same-tick reuse and FIFO self-deletion.
+    # Monotonic ISO 8601 UTC microsecond + 4-digit sequence prevents collisions and FIFO self-deletion.
     prefix = f"context_{stamp}_"
     same_tick = sorted(history_dir.glob(f"{prefix}*.json"))
     next_seq = 0
@@ -246,7 +266,7 @@ def save_checkpoint(
             continue
 
     (ck_dir / "CONTEXT.md").write_text(
-        _render_context_markdown(recent_items, saved_at.replace("T", " ")), encoding="utf-8"
+        _render_context_markdown(recent_items, saved_at), encoding="utf-8"
     )
     return history_file
 

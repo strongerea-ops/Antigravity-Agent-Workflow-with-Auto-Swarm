@@ -6,10 +6,15 @@ Uses isolated temporary directories so real workspace files are never mutated.
 """
 
 import json
+import re
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+RFC3339_UTC_US_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
+BASIC_UTC_US_BACKUP_RE = re.compile(r"^\d{8}T\d{12}Z_(?:\d{2}_)?")
+BASIC_UTC_US_CK_RE = re.compile(r"^context_\d{8}T\d{12}Z_\d{4}\.json$")
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 TEMPLATE_ROOT = Path(__file__).resolve().parents[2]
@@ -34,8 +39,12 @@ class TestWorkflowOps(unittest.TestCase):
                 repo_root=root,
             )
             manifest = json.loads((bdir / "manifest.json").read_text(encoding="utf-8"))
+            self.assertRegex(bdir.name, BASIC_UTC_US_BACKUP_RE)
+            self.assertRegex(manifest["timestamp"], RFC3339_UTC_US_RE)
             self.assertEqual(manifest["files"]["AGENTS.md"]["status"], "backed_up")
             self.assertEqual(manifest["files"]["new_file.txt"]["status"], "absent")
+            bdir2 = workflow_ops.run_backup(topic="sample_change", files=["AGENTS.md"], repo_root=root)
+            self.assertNotEqual(bdir, bdir2)
 
             target.write_text("# New\nline1\n", encoding="utf-8")
             (root / "new_file.txt").write_text("hello\n", encoding="utf-8")
@@ -75,10 +84,13 @@ class TestWorkflowOps(unittest.TestCase):
                 workflow_ops.save_checkpoint(objective=f"Burst {idx}", repo_root=root)
             history = sorted((root / ".agents" / "ck" / "history").glob("context_*.json"))
             self.assertEqual(len(history), workflow_ops.MAX_CHECKPOINTS)
+            for p in history:
+                self.assertRegex(p.name, BASIC_UTC_US_CK_RE)
             objectives = [json.loads(p.read_text(encoding="utf-8"))["active_objective"] for p in history]
             self.assertEqual(objectives, [f"Burst {i}" for i in range(5, 20)])
             ck = json.loads((root / ".agents" / "ck" / "context.json").read_text(encoding="utf-8"))
             self.assertEqual(ck["active_objective"], "Burst 19")
+            self.assertRegex(ck["saved_at"], RFC3339_UTC_US_RE)
             ctx_md = (root / ".agents" / "ck" / "CONTEXT.md").read_text(encoding="utf-8")
             self.assertIn("Burst 19", ctx_md)
             self.assertIn("Burst 5", ctx_md)
@@ -133,6 +145,16 @@ class TestWorkflowHooks(unittest.TestCase):
                 workflow_hooks.handle_pre_tool(src_payload, repo_root=root, custom_prefixes=("src/",))["decision"],
                 "allow",
             )
+
+    def test_post_tool_alert_uses_rfc3339_utc_microsecond(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "AGENTS.md").write_bytes(b"\xef\xbb\xbf# Bad BOM\n")
+            payload = {"toolCall": {"name": "edit_file", "args": {"Path": "AGENTS.md"}}}
+            workflow_hooks.handle_post_tool(payload, repo_root=root)
+            alert_text = (root / ".agents" / "ck" / "last_alert.log").read_text(encoding="utf-8")
+            first_ts = alert_text.splitlines()[0].split("]", 1)[0].lstrip("[")
+            self.assertRegex(first_ts, RFC3339_UTC_US_RE)
 
     def test_pre_tool_forbidden_command_ignores_placeholder_and_blocks_real_regex(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

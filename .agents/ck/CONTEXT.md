@@ -8,6 +8,6 @@
 
 ## Recent Trajectory (Latest 15 Turns)
 
-| Checkpoint | Time | Active Objective | Files | Status |
+| Checkpoint | Time (UTC) | Active Objective | Files | Status |
 |---|---|---|---|---|
-| **$t_0$ (Current)** | `00:00:00` | Initialize portable agent workflow and fill project placeholders | - | TEMPLATE_READY |
+| **$t_0$ (Current)** | `00:00:00.000000Z` | Initialize portable agent workflow and fill project placeholders | - | TEMPLATE_READY |

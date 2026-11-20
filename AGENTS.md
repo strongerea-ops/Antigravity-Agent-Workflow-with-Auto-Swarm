@@ -47,7 +47,7 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 - `{{SRC_DIR}}` — Application source code | `{{TEST_DIR}}` — Automated test suite
 - `.agents/` — `agents/` (`4` Agents), `skills/` (`4` Skills), `rules/rules.md`, `hooks.json`, `scripts/` (`workflow_hooks.py`, `workflow_ops.py`, `verify_workflow.py`, `test_workflow_ops_and_hooks.py`), `workflows/` (`workflow.json`, `project_fanout.py`), `templates/` (MCP & Scheduled Automation examples), `ck/` (`context.json`, `CONTEXT.md`, `history/`)
 - `artifacts/` — `Conversations/`, `user-requirements/`, `blueprints/`, `project-memory/`, `diffs/`, `reviews/` (plus event-driven `bug-reports/`, `solutions/`, `Lessons/`, `agent-confession/`)
-- `backup/` — `backup/YYYYMMDD-HHMMSS_ffffff_<topic>/` + `manifest.json` (SHA-256)
+- `backup/` — `backup/YYYYMMDDTHHMMSSffffffZ_<topic>/` + `manifest.json` (SHA-256, RFC 3339 UTC)
 
 ## 5. Read-Before-Touch & Lifecycle
 0. **$O(1)$ Autonomous Rehydration:** On a new session or after `/compact`, read the top `3` lines of [artifacts/Conversations/README.md](./artifacts/Conversations/README.md) + [.agents/ck/context.json](./.agents/ck/context.json) ($t_0$) immediately (~250 tokens).
@@ -56,7 +56,7 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 ## 6. Hard Constraints (Don'ts)
 1. Never commit hardcoded drive letters (e.g., `C:\`, `D:\`) or absolute local paths, and enforce UTF-8 without BOM (`BOM=False`); use relative paths only (except `file:///` links in chat).
 2. Never create a new Git branch unless explicitly instructed.
-3. Never edit protected source code (`{{PROTECTED_PATHS}}`), `AGENTS.md`, or `.agents/` before running Pre-Action Backup (`workflow_ops.py backup`) into `backup/YYYYMMDD-HHMMSS_ffffff_<topic>/` + `manifest.json`.
+3. Never edit protected source code (`{{PROTECTED_PATHS}}`), `AGENTS.md`, or `.agents/` before running Pre-Action Backup (`workflow_ops.py backup`) into `backup/YYYYMMDDTHHMMSSffffffZ_<topic>/` + `manifest.json`.
 4. Never violate project-specific domain constraints: `{{DOMAIN_CONSTRAINTS}}`.
 5. Never weaken or delete items on the Never Cut List: `{{NEVER_CUT_LIST}}` (Trust-Boundary Validation, Data-Integrity Error Handling, Security Controls, Automated Tests).
 6. Never truncate code or specs with placeholders like `// ... existing code ...` — write 100% complete replacements.

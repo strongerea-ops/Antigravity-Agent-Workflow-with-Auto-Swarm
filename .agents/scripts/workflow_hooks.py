@@ -10,7 +10,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -118,9 +118,14 @@ def _candidate_backup_roots(repo_root: Path) -> List[Path]:
 
 
 def _has_today_backup(rel_path: str, repo_root: Path, today_str: Optional[str] = None) -> bool:
-    date_prefix = today_str or datetime.now().strftime("%Y%m%d")
+    date_prefix = today_str or datetime.now(timezone.utc).strftime("%Y%m%d")
     for backup_root in _candidate_backup_roots(repo_root):
-        for folder in sorted(backup_root.glob(f"{date_prefix}-*"), reverse=True):
+        # Support both ISO 8601 Basic UTC (YYYYMMDDT*) and legacy (YYYYMMDD-*) backup folders.
+        candidates = sorted(
+            set(backup_root.glob(f"{date_prefix}T*")) | set(backup_root.glob(f"{date_prefix}-*")),
+            reverse=True,
+        )
+        for folder in candidates:
             manifest_path = folder / "manifest.json"
             if not manifest_path.is_file():
                 continue
@@ -231,7 +236,7 @@ def handle_post_tool(payload: Dict[str, Any], repo_root: Optional[Path] = None) 
             alert_file = ck_dir / "last_alert.log"
             if errors:
                 ck_dir.mkdir(parents=True, exist_ok=True)
-                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
                 body = f"[{ts}] Workflow audit alert ({len(errors)} issue(s)):\n" + "\n".join(
                     f"  - {err}" for err in errors
                 ) + "\n"

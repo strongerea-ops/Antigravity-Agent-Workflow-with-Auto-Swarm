@@ -36,7 +36,7 @@ List high-impact modules where changes affect multiple subsystems or runtime saf
 2. **Post-Approval Auto-Fix:** After `/approve`, if `@verifier` finds a defect strictly inside the approved scope with zero Conflict/Redundancy, `@lead` may dispatch `@builder` to fix it without re-asking `/approve` (preserving Pre-Action Backup, 100% Callers, Never Cut List, and Circuit Breaker $N \ge 3$). Any out-of-scope edit or newly discovered conflict requires a fresh `/approve`.
 3. **Pre-Action Backup & Rollback Semantics:**
    - Run `python .agents/scripts/workflow_ops.py backup --topic "<topic>" <files...>` before editing protected files.
-   - *Existing files:* Copied with `SHA-256` into `backup/YYYYMMDD-HHMMSS_ffffff_<topic>/manifest.json` (`"status": "backed_up"`). On rollback, copy the backup file back over the target.
+   - *Existing files:* Copied with `SHA-256` into `backup/YYYYMMDDTHHMMSSffffffZ_<topic>/manifest.json` (`"status": "backed_up"`, RFC 3339 UTC microsecond timestamp). On rollback, copy the backup file back over the target.
    - *Newly created files:* Recorded as `"status": "absent"`. On rollback, delete the newly created file cleanly.
 4. **Hook Runner CWD Contract:** Antigravity executes `.agents/hooks.json` commands with **CWD = `.agents/`**. All script paths inside `.agents/hooks.json` must resolve relative to `.agents/` (e.g., `scripts/workflow_hooks.py`).
 
