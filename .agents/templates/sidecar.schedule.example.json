@@ -1,0 +1,9 @@
+{
+  "display_name": "{{PROJECT_NAME}} Scheduled Check",
+  "builtin": "schedule",
+  "restart_policy": "always",
+  "args": {
+    "schedule": "CRON_TZ={{IANA_TIMEZONE}} {{SCHEDULE_CRON}}",
+    "prompt": "{{SCHEDULE_TASK_PROMPT}}"
+  }
+}

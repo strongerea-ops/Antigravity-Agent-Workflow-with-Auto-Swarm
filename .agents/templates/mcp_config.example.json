@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "{{MCP_SERVER_NAME}}-stdio": {
+      "command": "{{MCP_STDIO_COMMAND}}",
+      "args": ["--project", "{{PROJECT_NAME}}"],
+      "env": {
+        "APP_ENV": "development"
+      }
+    },
+    "{{MCP_SERVER_NAME}}-http": {
+      "url": "{{MCP_HTTP_URL}}"
+    }
+  }
+}

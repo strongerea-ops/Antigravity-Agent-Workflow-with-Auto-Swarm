@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.2.0",
+  "saved_at": "2026-11-20T00:00:00+00:00",
+  "project": "{{PROJECT_NAME}}",
+  "active_objective": "Initialize portable agent workflow and fill project placeholders",
+  "status": "TEMPLATE_READY",
+  "key_decisions": [
+    "Baseline starter kit initialized; run workflow_ops.py check-placeholders before first sprint."
+  ],
+  "touched_files": [],
+  "pending_next_steps": [
+    "Follow MANUAL_EN.md or MANUAL_TH.md to fill {{PLACEHOLDERS}} and run verify_workflow.py"
+  ]
+}

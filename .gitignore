@@ -1,0 +1,27 @@
+# Local Pre-Action Backups & Runtime Alerts
+backup/
+.agents/ck/last_alert.log
+.agents/ck/last_invariant_alert.log
+
+# Temporary Scratch & Logs
+scratch/
+*.log
+
+# Python Artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets & Environment Files
+.env
+.env.*
+!.env.example
+
+# OS / Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

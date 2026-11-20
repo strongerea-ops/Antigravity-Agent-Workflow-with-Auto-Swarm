@@ -1,0 +1,29 @@
+{
+  "name": "project-fanout-review",
+  "description": "Dynamic run_workflow template: discover target files, fan out parallel structured reviews, and aggregate findings.",
+  "entry": "project_fanout.py",
+  "argsSchema": {
+    "type": "object",
+    "properties": {
+      "target_glob": {
+        "type": "string",
+        "description": "Relative glob pattern of files to inspect (e.g., src/**/*.py)"
+      },
+      "objective": {
+        "type": "string",
+        "description": "Review or analysis objective applied to each file"
+      },
+      "max_items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 50,
+        "description": "Maximum number of files processed in one fan-out run"
+      },
+      "model_tier": {
+        "type": "string",
+        "enum": ["inherit", "flash_lite", "flash", "pro"],
+        "description": "Model tier used for parallel worker agents"
+      }
+    }
+  }
+}
