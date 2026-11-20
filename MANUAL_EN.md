@@ -36,7 +36,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 | `Stop` alert gate (`alert-stop-gate`, opt-in) | **Hook Script (Hard when enabled)** | Disabled by default (`"enabled": false`); checks `continuationActive` to prevent infinite retry loops. |
 | `verify_workflow.py` & `test_workflow_ops_and_hooks.py` | **CLI Tool (Hard)** | Deterministic exit code `0` / `1` on schemas, links, UTF-8 BOM, syntax, and hook behavior. |
 | `/approve` gate, `no-code / no-detail` default, Circuit Breaker ($N \ge 3$), `Post-Approval Auto-Fix` | **Prompt-Governed Policy** | Enforced via `AGENTS.md`, `rules.md`, and role prompts; reinforced by human review. |
-| Main chat UI model & thinking budget | **UI-Only Control** | Cannot be switched programmatically by the agent; switch via UI dropdown or when spawning `swarm` workers. |
+| Main chat UI model, thinking budget & opening a new window | **UI-Only Control** | Cannot be switched or opened programmatically; use UI dropdown / `New Conversation` (while `/handoff` automates packet creation and `SessionStart` pickup). |
 
 ---
 
@@ -44,7 +44,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 
 1. **Language Split for Token Conservation:** System docs (`AGENTS.md`, `.agents/`) and internal thinking remain in **English** to minimize token usage, while user conversations and `artifacts/` records adapt to `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` (e.g., `Thai` or `English`).
 2. **Default `no-code / no-detail` Interaction + Smart Detail Expansion:** General Q&A and status checks return `3–5` concise principle-first bullets without code snippets or untouched file lists. Full technical detail activates automatically during **planning** (pre-`/approve`), **code implementation** (3-part summary + modified file links + `.diff`), or on `/more-detail`.
-3. **Progressive Disclosure & Context Budget Control:** Skills load on demand; large file reads stay sliced (`<= 300` lines); proactive `/compact` recommendation after `10–12` turns (`~35` calls); $O(1)$ session rehydration (~250 tokens) from `Conversations/README.md` + `.agents/ck/context.json`.
+3. **Progressive Disclosure, `/compact` & New-Window `/handoff`:** Skills load on demand; large file reads stay sliced (`<= 300` lines); upon `10–12` turns (`~35` calls) or `<CONTEXT_SUMMARY>`, `@lead` offers **`/compact`** (continue in this window) or **`/handoff`** (generate `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + ready-to-paste prompt for a fresh chat window automatically detected by `SessionStart`); $O(1)$ rehydration (~250 tokens) reads `Conversations/README.md` + `.agents/ck/context.json`.
 4. **3-Tier Auto Triage + Quota Pool Priority + Auto Effort:**
    - **Tier 0 In-line:** 1–2 line fixes or quick Q&A (`<= 3` reads) on warm cache.
    - **Tier 1 `invoke_subagent`:** Scoped tasks (`@researcher`, `@builder`, `@verifier`) or `1–8` file edits.
@@ -94,6 +94,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 | `/finalize` | `plan-and-build` (`@lead`) | Run Acceptance Evidence Closure, generate `.diff`, evaluate `/compound`, and log the turn. |
 | `/compound` | `verify-and-debug` (`@lead`) | Convert solved non-trivial issues into permanent guards (`Test/Lint -> Rule -> Solution Doc`). |
 | `/ck` | `workflow-ops` (`@lead`) | Save or inspect Rolling 15 Checkpoints (`.agents/ck/context.json` & `CONTEXT.md`). |
+| `/handoff` | `workflow-ops` (`@lead`) | Paired with `/compact` alerts: generate `.agents/ck/HANDOFF.md`, archive under `artifacts/handoffs/`, mark `HANDOFF_READY` for `SessionStart` pickup, and output a Ready-to-Paste Starter Prompt for a fresh chat window. |
 | `/concept`, `/no-code`, `/no-detail` | `AGENTS.md` §0 (`@lead`) | Force concise `3–5` bullet principle/behavior explanation with zero code snippets or untouched file lists. |
 | `/more-detail` | `AGENTS.md` §0 (`@lead`) | Expand into full file paths, line numbers, code/config details, and full command outputs. |
 | `/refactor-agents` | `workflow-ops` (`@lead`) | Audit and streamline `AGENTS.md` and `.agents/` while keeping byte budgets and schemas valid. |
@@ -117,6 +118,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 | `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | Create microsecond Pre-Action Backup + SHA-256 `manifest.json` under `backup/`. |
 | `python .agents/scripts/workflow_ops.py diff --output "artifacts/diffs/YYYY-MM-DD/<slug>.diff"` | Generate unified `-U1` diff against the latest backup manifest (works without `.git`). |
 | `python .agents/scripts/workflow_ops.py log-turn --title "<t>" --summary "<s>"` | Append to daily `artifacts/Conversations/`, update `README.md`, and rotate Rolling 15 Checkpoints. |
+| `python .agents/scripts/workflow_ops.py handoff --objective "<obj>"` | Generate a new-window handoff packet (`.agents/ck/HANDOFF.md` + `artifacts/handoffs/`), set `HANDOFF_READY` for `SessionStart`, and output a starter prompt. |
 | `python .agents/scripts/verify_workflow.py` | Self-audit `AGENTS.md`, 4 Agents, 4 Skills, `hooks.json`, scripts, `run_workflow` syntax, templates, links, and BOM (`Exit 0`). |
 | `python .agents/scripts/verify_workflow.py --root "<path>"` | Audit another project's workflow from outside its directory. |
 | `python -m unittest discover -s .agents/scripts -p "test_*.py" -v` | Run deterministic self-tests for hooks, backup, diff, checkpoints, placeholder scanner, and verifier. |

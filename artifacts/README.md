@@ -9,4 +9,4 @@
 - [project-memory](./project-memory/README.md) — Architecture Decision Records (ADRs)
 - [diffs](./diffs/README.md) — Unified diffs (`-U1`) generated per change
 - [reviews](./reviews/README.md) — Verification and static audit reports
-- **Event-Driven Categories (create `README.md` and link here only when populated):** `bug-reports/`, `solutions/`, `Lessons/`, `agent-confession/`
+- **Event-Driven Categories (create `README.md` and link here only when populated):** `handoffs/` (auto-indexed by `/handoff`), `bug-reports/`, `solutions/`, `Lessons/`, `agent-confession/`

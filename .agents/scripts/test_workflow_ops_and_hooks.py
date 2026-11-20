@@ -104,6 +104,46 @@ class TestWorkflowOps(unittest.TestCase):
             (root / "AGENTS.md").write_text("# Real Project\n", encoding="utf-8")
             self.assertEqual(workflow_ops.run_check_placeholders(repo_root=root, fail_on_found=True), 0)
 
+    def test_handoff_packet_and_session_start_lifecycle(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "artifacts").mkdir(parents=True)
+            (root / "artifacts" / "README.md").write_text("# Artifacts\n", encoding="utf-8")
+
+            res = workflow_ops.run_handoff(
+                objective="Implement payment webhook retry",
+                summary="API endpoints done; webhook retry pending",
+                completed=["Auth API verified"],
+                settled=["Use idempotency key header"],
+                next_steps=["Build webhook worker"],
+                blockers=["Need staging secret"],
+                touched=["src/api.py"],
+                repo_root=root,
+            )
+            handoff_path = Path(res["handoff_file"])
+            active_path = Path(res["active_handoff"])
+            self.assertTrue(handoff_path.is_file())
+            self.assertTrue(active_path.is_file())
+            self.assertIn("Ready-to-Paste New-Window Starter Prompt", active_path.read_text(encoding="utf-8"))
+            self.assertTrue((root / "artifacts" / "handoffs" / "README.md").is_file())
+            self.assertIn("handoffs", (root / "artifacts" / "README.md").read_text(encoding="utf-8"))
+
+            ck = json.loads((root / ".agents" / "ck" / "context.json").read_text(encoding="utf-8"))
+            self.assertEqual(ck["status"], "HANDOFF_READY")
+            self.assertEqual(ck["active_handoff"], ".agents/ck/HANDOFF.md")
+            self.assertRegex(ck["saved_at"], RFC3339_UTC_US_RE)
+
+            # New window SessionStart must surface .agents/ck/HANDOFF.md
+            start_out = workflow_hooks.handle_session_start({}, repo_root=root)
+            msg = start_out["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn(".agents/ck/HANDOFF.md", msg)
+
+            # Next completed turn automatically deactivates stale handoff pointer
+            workflow_ops.run_log_turn(title="Resumed work", summary="Built webhook worker", repo_root=root)
+            next_out = workflow_hooks.handle_session_start({}, repo_root=root)
+            next_msg = next_out["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertNotIn("Active handoff packet waiting", next_msg)
+
 
 class TestWorkflowHooks(unittest.TestCase):
     def test_session_start_graceful_empty_and_rehydration(self) -> None:

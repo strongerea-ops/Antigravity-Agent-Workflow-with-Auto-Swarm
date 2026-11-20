@@ -32,6 +32,7 @@ python .agents/scripts/workflow_ops.py check-placeholders
 python .agents/scripts/workflow_ops.py backup --topic "<topic>" <files...>
 python .agents/scripts/workflow_ops.py diff --output "artifacts/diffs/YYYY-MM-DD/<topic>.diff"
 python .agents/scripts/workflow_ops.py log-turn --title "<title>" --summary "<summary>"
+python .agents/scripts/workflow_ops.py handoff --objective "<next objective>"
 python .agents/scripts/verify_workflow.py
 python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 ```
@@ -81,7 +82,7 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 > - **Runtime Scope:** Main chat model cannot be switched programmatically (UI Dropdown only); model elevation applies on new worker spawns or phase transitions.
 
 ## 8. Modular Skills Directory (`4` Skills)
-*(`/vibe`, `/design`, `/approve`, `/code`, `/simplify`, `/test`, `/debug`, `/audit`, `/finalize`, `/compound`, `/ck`, `/concept`, `/no-code`, `/no-detail`, `/more-detail` are Prompt Action Triggers in chat.)*
+*(`/vibe`, `/design`, `/approve`, `/code`, `/simplify`, `/test`, `/debug`, `/audit`, `/finalize`, `/compound`, `/ck`, `/handoff`, `/concept`, `/no-code`, `/no-detail`, `/more-detail` are Prompt Action Triggers in chat.)*
 - **Project Tasks & Objectives:** [project-tasks](./.agents/skills/project-tasks/SKILL.md)
 - **Plan, Build & Simplify:** [plan-and-build](./.agents/skills/plan-and-build/SKILL.md)
 - **Verify, RCA & Compound Learning:** [verify-and-debug](./.agents/skills/verify-and-debug/SKILL.md)
@@ -97,7 +98,7 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 6. **Mandatory Blueprint:** New features, modules, or workflow changes require a blueprint with stable `U-IDs` (`U1, U2...`) in `artifacts/blueprints/`.
 7. **Proposal Bundling:** Merge compatible proposals into one cohesive plan; show Pros/Cons only for divergent paths.
 8. **Relative Paths & Clean UTF-8:** Enforce `BOM=False`, relative paths only in committed files, and clean syntax via `verify_workflow.py`.
-9. **Context Quota & Auto Compact:** Read `<= 300` lines; prune noisy logs; recommend `/compact` upon `<CONTEXT_SUMMARY>` or `10–12` turns (`~35` tool calls); restore in $O(1)$ from `.agents/ck/context.json` (checkpoint status NEVER equals `/approve`).
+9. **Context Quota, `/compact` & `/handoff`:** Read `<= 300` lines; prune noisy logs; upon `<CONTEXT_SUMMARY>` or `10–12` turns (`~35` tool calls), proactively offer **`/compact`** (stay in this window) or **`/handoff`** (generate `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + ready-to-paste prompt for a fresh chat window picked up automatically by `SessionStart`); restore in $O(1)$ from `.agents/ck/context.json` (checkpoint/handoff status NEVER equals `/approve`).
 10. **Premise Check & Circuit Breaker ($N \ge 3$):** After `2` failures on the same premise, **Attack the Premise**; after `3` consecutive failures on the same root cause, halt immediately into Explain-First mode.
 11. **Senior Dev & Compound Learning:** Minimal Diff `-U1`, 100% Callers, Never Cut List, and evaluate `/compound` (`Test/Lint -> Rule -> Solution Doc`) after closing non-trivial bugs.
 12. **3-Tier Auto Triage Gate (`Tier 0–2` + `run_workflow`):**

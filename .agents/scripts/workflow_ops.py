@@ -216,6 +216,7 @@ def save_checkpoint(
     touched_files: Optional[List[str]] = None,
     key_decisions: Optional[List[str]] = None,
     pending_next_steps: Optional[List[str]] = None,
+    active_handoff: Optional[str] = None,
     repo_root: Optional[Path] = None,
 ) -> Path:
     """Saves a checkpoint snapshot using RFC 3339 UTC microsecond precision and Rolling 15 FIFO."""
@@ -238,6 +239,8 @@ def save_checkpoint(
         "touched_files": touched_files or [],
         "pending_next_steps": pending_next_steps or [],
     }
+    if active_handoff:
+        payload["active_handoff"] = active_handoff
 
     # Monotonic ISO 8601 UTC microsecond + 4-digit sequence prevents collisions and FIFO self-deletion.
     prefix = f"context_{stamp}_"
@@ -271,10 +274,10 @@ def save_checkpoint(
     return history_file
 
 
-def _insert_readme_bullet(readme_path: Path, bullet: str) -> None:
+def _insert_readme_bullet(readme_path: Path, bullet: str, default_heading: str = "# Conversations Vault") -> None:
     readme_path.parent.mkdir(parents=True, exist_ok=True)
     if not readme_path.exists():
-        readme_path.write_text(f"# Conversations Vault\n\n{bullet}\n", encoding="utf-8")
+        readme_path.write_text(f"{default_heading}\n\n{bullet}\n", encoding="utf-8")
         return
     lines = readme_path.read_text(encoding="utf-8").splitlines()
     insert_idx = 0
@@ -367,6 +370,107 @@ def run_log_turn(
     }
 
 
+def run_handoff(
+    objective: str,
+    summary: Optional[str] = None,
+    completed: Optional[List[str]] = None,
+    settled: Optional[List[str]] = None,
+    next_steps: Optional[List[str]] = None,
+    blockers: Optional[List[str]] = None,
+    touched: Optional[List[str]] = None,
+    repo_root: Optional[Path] = None,
+) -> Dict[str, str]:
+    """Generates a new-window handoff packet (.agents/ck/HANDOFF.md + artifacts/handoffs/) and marks HANDOFF_READY."""
+    root = (repo_root or REPO_ROOT).resolve()
+    now = _utc_now()
+    ts_iso = _format_rfc3339_utc(now)
+    ts_basic = _format_basic_utc(now)
+    date_str = now.strftime("%Y-%m-%d")
+
+    handoff_dir = root / "artifacts" / "handoffs" / date_str
+    handoff_dir.mkdir(parents=True, exist_ok=True)
+    handoff_file = handoff_dir / f"{ts_basic}_handoff.md"
+    seq = 1
+    while handoff_file.exists():
+        handoff_file = handoff_dir / f"{ts_basic}_{seq:02d}_handoff.md"
+        seq += 1
+
+    completed_list = completed or []
+    settled_list = settled or []
+    next_list = next_steps or ["Continue from the active objective after verifying disk state"]
+    blockers_list = blockers or []
+    touched_list = touched or []
+
+    lines: List[str] = [
+        "# Session Handoff Packet",
+        "",
+        f"- **Generated (UTC):** `{ts_iso}`",
+        f"- **Project:** `{root.name}`",
+        f"- **Active Objective:** {objective}",
+        "- **Status:** `HANDOFF_READY` *(verify disk state before editing; handoff never equals `/approve`)*",
+        "",
+    ]
+    if summary:
+        lines.extend(["## Context Summary", summary, ""])
+    lines.append("## Completed & Verified")
+    lines.extend([f"- {item}" for item in completed_list] or ["- None recorded"])
+    lines.extend(["", "## Key Touched Files"])
+    lines.extend([f"- `{item}`" for item in touched_list] or ["- None recorded"])
+    lines.extend(["", "## Session-Settled Decisions (`session-settled:`)"])
+    lines.extend([f"- {item}" for item in settled_list] or ["- None recorded"])
+    lines.extend(["", "## Pending Next Steps"])
+    lines.extend([f"- {item}" for item in next_list])
+    lines.extend(["", "## Open Risks, Blockers & Untested Scope"])
+    lines.extend([f"- {item}" for item in blockers_list] or ["- None recorded"])
+    lines.extend(
+        [
+            "",
+            "## Ready-to-Paste New-Window Starter Prompt",
+            "```text",
+            f"Resume from handoff: read `.agents/ck/HANDOFF.md`, `.agents/ck/context.json`, and the top 3 lines of `artifacts/Conversations/README.md`.",
+            f"Active objective: {objective}",
+            "Verify current files on disk before proposing edits (handoff status is not /approve).",
+            "```",
+            "",
+        ]
+    )
+    content = "\n".join(lines)
+    handoff_file.write_text(content, encoding="utf-8")
+
+    active_pointer = root / ".agents" / "ck" / "HANDOFF.md"
+    active_pointer.parent.mkdir(parents=True, exist_ok=True)
+    active_pointer.write_text(content, encoding="utf-8")
+
+    handoffs_readme = root / "artifacts" / "handoffs" / "README.md"
+    rel_from_cat = handoff_file.relative_to(root / "artifacts" / "handoffs").as_posix()
+    bullet = f"- {date_str} (`{ts_iso}`) — [{objective}](./{rel_from_cat})"
+    _insert_readme_bullet(handoffs_readme, bullet, default_heading="# Session Handoffs Vault")
+
+    root_art_readme = root / "artifacts" / "README.md"
+    if root_art_readme.is_file():
+        art_text = root_art_readme.read_text(encoding="utf-8")
+        if "handoffs" not in art_text:
+            art_text = art_text.rstrip() + "\n- [handoffs](./handoffs/README.md) — New-window session handoff packets (`/handoff`)\n"
+            root_art_readme.write_text(art_text, encoding="utf-8")
+
+    history_file = save_checkpoint(
+        objective=objective,
+        status="HANDOFF_READY",
+        touched_files=touched_list,
+        key_decisions=settled_list,
+        pending_next_steps=next_list,
+        active_handoff=".agents/ck/HANDOFF.md",
+        repo_root=root,
+    )
+    rel_handoff = handoff_file.relative_to(root).as_posix()
+    print(f"[Handoff] Created {rel_handoff} and updated .agents/ck/HANDOFF.md")
+    return {
+        "handoff_file": str(handoff_file),
+        "active_handoff": str(active_pointer),
+        "checkpoint_file": str(history_file),
+    }
+
+
 def scan_placeholders(repo_root: Optional[Path] = None) -> Dict[str, List[Tuple[str, int]]]:
     """Scans active workflow config, agent, skill, hook, workflow, and template files for {{PLACEHOLDERS}}."""
     root = (repo_root or REPO_ROOT).resolve()
@@ -452,6 +556,16 @@ def build_parser() -> argparse.ArgumentParser:
     cp = subparsers.add_parser("check-placeholders", help="List remaining {{PLACEHOLDERS}} in workflow files")
     cp.add_argument("--fail-on-found", action="store_true", help="Exit 1 if unfilled placeholders remain")
     cp.add_argument("--repo-root", default=None, help="Override repository root")
+
+    ho = subparsers.add_parser("handoff", help="Generate new-window handoff packet (/handoff)")
+    ho.add_argument("--objective", required=True, help="Active objective for the new chat window")
+    ho.add_argument("--summary", default=None, help="Brief context summary")
+    ho.add_argument("--completed", nargs="*", default=None, help="Completed and verified items")
+    ho.add_argument("--settled", nargs="*", default=None, help="Session-settled decisions")
+    ho.add_argument("--next", nargs="*", default=None, dest="next_steps", help="Pending next steps")
+    ho.add_argument("--blockers", nargs="*", default=None, help="Open risks, blockers, or untested scope")
+    ho.add_argument("--touched", nargs="*", default=None, help="Key touched relative file paths")
+    ho.add_argument("--repo-root", default=None, help="Override repository root")
     return parser
 
 
@@ -484,6 +598,18 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 0
     if args.command == "check-placeholders":
         return run_check_placeholders(repo_root=root, fail_on_found=args.fail_on_found)
+    if args.command == "handoff":
+        run_handoff(
+            objective=args.objective,
+            summary=args.summary,
+            completed=args.completed,
+            settled=args.settled,
+            next_steps=args.next_steps,
+            blockers=args.blockers,
+            touched=args.touched,
+            repo_root=root,
+        )
+        return 0
     return 1
 
 

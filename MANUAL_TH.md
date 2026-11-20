@@ -36,7 +36,7 @@
 | `Stop` ด่านกันปิดงานเมื่อมี Alert (`alert-stop-gate`) | **Hook Script (บังคับจริงเมื่อเปิดใช้)** | ปิดไว้เป็นค่าเริ่มต้น (`"enabled": false`) เพื่อความไม่จุกจิก เมื่อเปิดใช้จะเช็ก `continuationActive` กันลูปไม่รู้จบ |
 | `verify_workflow.py` และ `test_workflow_ops_and_hooks.py` | **CLI Tool (บังคับจริง)** | ตรวจเชิงประจักษ์ได้ Exit Code `0` / `1` สำหรับ Schema, ลิงก์เสีย, BOM, Syntax และพฤติกรรมของ Hook |
 | ด่าน `/approve`, โหมด `no-code / no-detail`, Circuit Breaker ($N \ge 3$), `Post-Approval Auto-Fix` | **Prompt-Governed Policy** | กำกับผ่านกฎใน `AGENTS.md` และบทบาทเอเจนต์ โดยให้ผู้ใช้ตรวจสอบร่วม |
-| โมเดลแชตหลักและ Thinking Budget | **UI-Only Control** | เอเจนต์ไม่สามารถสลับโมเดลแชตหลักด้วยตัวเองได้ ต้องเปลี่ยนจาก UI Dropdown หรือกำหนดตอนสร้าง worker ใน `swarm` |
+| โมเดลแชตหลัก, Thinking Budget และการเปิดหน้าต่างแชตใหม่ | **UI-Only Control** | เอเจนต์สลับโมเดลหรือเปิดหน้าต่างใหม่เองไม่ได้ ต้องเลือกจาก UI / กด `New Conversation` *(ส่วน `/handoff` สร้าง Handoff Packet และให้ `SessionStart` รับช่วงต่ออัตโนมัติ)* |
 
 ---
 
@@ -44,7 +44,7 @@
 
 1. **แยกภาษาเพื่อประหยัด Token (Language Split):** ไฟล์ระบบ (`AGENTS.md`, `.agents/`) และกระบวนการคิดภายในใช้ภาษาอังกฤษเพื่อประหยัด Token ส่วนภาษาในการสนทนาและบันทึกใน `artifacts/` ปรับเป็นภาษาที่ทีมต้องการได้ผ่าน Placeholder `{{CHAT_AND_ARTIFACTS_LANGUAGE}}`
 2. **คุยกระชับเป็นค่าเริ่มต้น และขยายละเอียดเฉพาะตอนจำเป็น (`no-code / no-detail`):** การถามตอบและเช็กสถานะทั่วไปตอบเฉพาะหลักการ เงื่อนไขตัดสินใจ และพฤติกรรม `3–5` ข้อ (งดโค้ดและรายชื่อไฟล์ที่ไม่ได้แก้) และจะขยายรายละเอียดครบถ้วนอัตโนมัติเฉพาะตอน **วางแผนก่อน `/approve`**, **ลงมือเขียน/แก้โค้ด** (สรุป 3 ส่วน + ลิงก์ไฟล์จริง + `.diff`), หรือเมื่อสั่ง `/more-detail`
-3. **โหลดเฉพาะสิ่งที่จำเป็นและคุมงบความจำ (Progressive Disclosure & Context Budget):** โหลดสกิลเฉพาะตอนใช้งาน, อ่านไฟล์ใหญ่แบบเจาะช่วง ($\le 300$ บรรทัด), แนะนำ `/compact` เมื่อครบ `10–12` เทิร์น (`~35` calls), และฟื้นความจำรอบใหม่แบบ $O(1)$ (~250 tokens) จาก `Conversations/README.md` + `.agents/ck/context.json`
+3. **โหลดเฉพาะสิ่งที่จำเป็น, `/compact` และ `/handoff` ย้ายหน้าต่างแชตใหม่:** โหลดสกิลเฉพาะตอนใช้งาน, อ่านไฟล์ใหญ่แบบเจาะช่วง ($\le 300$ บรรทัด), เมื่อครบ `10–12` เทิร์น (`~35` calls) หรือพบ `<CONTEXT_SUMMARY>` ระบบจะเสนอ **`/compact`** (ทำต่อหน้าต่างเดิม) คู่กับ **`/handoff`** (สร้าง `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + Starter Prompt พร้อมให้ `SessionStart` ในหน้าต่างใหม่รับช่วงต่ออัตโนมัติ) พร้อมฟื้นความจำแบบ $O(1)$ (~250 tokens) จาก `Conversations/README.md` + `.agents/ck/context.json`
 4. **จัดขนาดงานอัตโนมัติ 3 ระดับ + โควตา Pool + Auto Effort:**
    - **Tier 0 In-line:** แก้ 1–2 บรรทัด หรือถามตอบสั้น ($\le 3$ reads) จบในแชตเดียว
    - **Tier 1 `invoke_subagent`:** งานเฉพาะทาง (`@researcher`, `@builder`, `@verifier`) หรือแก้ `1–8` ไฟล์
@@ -94,6 +94,7 @@
 | `/finalize` | `plan-and-build` (`@lead`) | ตรวจรับ Acceptance Criteria ทีละข้อ, สร้าง `.diff`, ประเมิน `/compound` และบันทึกประวัติประจำรอบ |
 | `/compound` | `verify-and-debug` (`@lead`) | แปลงบทเรียนหลังแก้ปัญหาสำเร็จเป็นเกราะป้องกันถาวรตามลำดับที่ถูกที่สุด (`Test/Lint -> Rule -> Solution Doc`) |
 | `/ck` | `workflow-ops` (`@lead`) | บันทึกหรือตรวจสอบสถานะ Rolling 15 Checkpoints ใน `.agents/ck/` |
+| `/handoff` | `workflow-ops` (`@lead`) | ใช้งานคู่กับคำเตือน `/compact`: สร้าง `.agents/ck/HANDOFF.md` และบันทึกใน `artifacts/handoffs/` พร้อมตั้งสถานะ `HANDOFF_READY` ให้ `SessionStart` ในหน้าต่างแชตใหม่รับช่วงต่อทันที และแสดง Starter Prompt พร้อมคัดลอกวาง |
 | `/concept`, `/no-code`, `/no-detail` | `AGENTS.md` §0 (`@lead`) | บังคับตอบเฉพาะหลักการและพฤติกรรม `3–5` ข้อแบบเข้าใจง่าย งดโค้ดและรายชื่อไฟล์ที่ไม่ถูกแก้ |
 | `/more-detail` | `AGENTS.md` §0 (`@lead`) | ขยายคำตอบเชิงลึกครบทุกไฟล์ บรรทัด โค้ด และผลลัพธ์ละเอียด |
 | `/refactor-agents` | `workflow-ops` (`@lead`) | ตรวจและปรับโครงสร้าง `AGENTS.md` กับ `.agents/` ให้กระชับและผ่านตัวตรวจ Schema |
@@ -117,6 +118,7 @@
 | `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | สำรองไฟล์ก่อนแก้ไขลง `backup/` พร้อม `SHA-256` และสถานะไฟล์ใหม่ (`absent`) |
 | `python .agents/scripts/workflow_ops.py diff --output "artifacts/diffs/YYYY-MM-DD/<slug>.diff"` | สร้างไฟล์ `.diff` (`-U1`) เทียบกับ Backup ล่าสุด (ทำงานได้แม้ไม่มี `.git`) |
 | `python .agents/scripts/workflow_ops.py log-turn --title "<t>" --summary "<s>"` | บันทึกประวัติสนทนาประจำวัน อัปเดต `README.md` และหมุนเวียน Rolling 15 Checkpoints |
+| `python .agents/scripts/workflow_ops.py handoff --objective "<obj>"` | สร้าง Handoff Packet สำหรับหน้าต่างแชตใหม่ (`.agents/ck/HANDOFF.md` + `artifacts/handoffs/`), ตั้งค่า `HANDOFF_READY` ให้ `SessionStart` และสร้าง Starter Prompt |
 | `python .agents/scripts/verify_workflow.py` | ตรวจความสมบูรณ์ของ `AGENTS.md`, 4 Agents, 4 Skills, `hooks.json`, สคริปต์, `run_workflow`, เทมเพลต, ลิงก์ และ BOM (ต้องได้ `Exit 0`) |
 | `python .agents/scripts/verify_workflow.py --root "<path>"` | ตรวจเวิร์กโฟลว์ของโปรเจกต์อื่นโดยระบุพาธปลายทาง |
 | `python -m unittest discover -s .agents/scripts -p "test_*.py" -v` | รันชุดทดสอบอัตโนมัติของสคริปต์และฮุคทั้งหมดในโฟลเดอร์ชั่วคราวแยกอิสระ |

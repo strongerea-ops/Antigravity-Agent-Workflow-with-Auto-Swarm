@@ -167,9 +167,13 @@ def handle_session_start(payload: Dict[str, Any], repo_root: Optional[Path] = No
     saved_at = str(ck.get("saved_at") or "").strip()
     if not objective:
         return {}
+    active_handoff = str(ck.get("active_handoff") or "").strip()
+    handoff_note = ""
+    if status == "HANDOFF_READY" and active_handoff and (root / active_handoff).is_file():
+        handoff_note = f" Active handoff packet waiting at `{active_handoff}` — read it first to resume in this new window."
     msg = (
-        f"[O(1) Rehydration] Latest checkpoint ({saved_at}, status={status}): {objective}. "
-        "Verify current files before acting; checkpoint status is never /approve."
+        f"[O(1) Rehydration] Latest checkpoint ({saved_at}, status={status}): {objective}.{handoff_note} "
+        "Verify current files before acting; checkpoint/handoff status is never /approve."
     )
     return {
         "injectSteps": [
