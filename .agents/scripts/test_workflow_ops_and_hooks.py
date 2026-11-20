@@ -64,6 +64,22 @@ class TestWorkflowOps(unittest.TestCase):
             self.assertTrue((root / ".agents" / "ck" / "CONTEXT.md").is_file())
             self.assertTrue((root / "artifacts" / "Conversations" / "README.md").is_file())
 
+    def test_save_checkpoint_burst_same_second_fifo_order(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for idx in range(20):
+                workflow_ops.save_checkpoint(objective=f"Burst {idx}", repo_root=root)
+            history = sorted((root / ".agents" / "ck" / "history").glob("context_*.json"))
+            self.assertEqual(len(history), workflow_ops.MAX_CHECKPOINTS)
+            objectives = [json.loads(p.read_text(encoding="utf-8"))["active_objective"] for p in history]
+            self.assertEqual(objectives, [f"Burst {i}" for i in range(5, 20)])
+            ck = json.loads((root / ".agents" / "ck" / "context.json").read_text(encoding="utf-8"))
+            self.assertEqual(ck["active_objective"], "Burst 19")
+            ctx_md = (root / ".agents" / "ck" / "CONTEXT.md").read_text(encoding="utf-8")
+            self.assertIn("Burst 19", ctx_md)
+            self.assertIn("Burst 5", ctx_md)
+            self.assertNotIn("Burst 4", ctx_md)
+
     def test_check_placeholders_detects_and_clears(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

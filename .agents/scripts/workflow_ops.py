@@ -202,7 +202,7 @@ def save_checkpoint(
 
     now = datetime.now().astimezone()
     saved_at = now.isoformat(timespec="seconds")
-    stamp = now.strftime("%Y%m%d_%H%M%S")
+    stamp = now.strftime("%Y%m%d_%H%M%S_%f")
 
     payload: Dict[str, Any] = {
         "schema_version": "1.2.0",
@@ -215,17 +215,22 @@ def save_checkpoint(
         "pending_next_steps": pending_next_steps or [],
     }
 
-    history_file = history_dir / f"context_{stamp}.json"
-    counter = 1
-    while history_file.exists():
-        history_file = history_dir / f"context_{stamp}_{counter}.json"
-        counter += 1
+    # Monotonic microsecond + 4-digit suffix prevents same-tick reuse and FIFO self-deletion.
+    prefix = f"context_{stamp}_"
+    same_tick = sorted(history_dir.glob(f"{prefix}*.json"))
+    next_seq = 0
+    if same_tick:
+        tail = same_tick[-1].stem.rsplit("_", 1)[-1]
+        if tail.isdigit():
+            next_seq = int(tail) + 1
+    history_file = history_dir / f"{prefix}{next_seq:04d}.json"
 
     history_file.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
     all_history = sorted(history_dir.glob("context_*.json"))
     while len(all_history) > MAX_CHECKPOINTS:
-        all_history.pop(0).unlink(missing_ok=True)
+        drop_idx = 1 if all_history[0] == history_file else 0
+        all_history.pop(drop_idx).unlink(missing_ok=True)
 
     shutil.copy2(history_file, ck_dir / "context.json")
 
