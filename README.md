@@ -1,13 +1,15 @@
 # Antigravity Agent Workflow with Auto-Swarm
 
-> **Language / เลือกภาษา:** [English](#english) | [ภาษาไทย](#ภาษาไทย)  
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F6V72AZBUH)
+
+> **Language / เลือกภาษา:** [English](#english) | [ภาษาไทย](#ภาษาไทย) | [Sponsor / สนับสนุนโปรเจกต์](#support-this-project)  
 > **Complete Manuals / คู่มือฉบับสมบูรณ์:** [MANUAL_EN.md](./MANUAL_EN.md) (English) | [MANUAL_TH.md](./MANUAL_TH.md) (ภาษาไทย)
 
 ---
 
 ## English
 
-A portable, project-agnostic **Antigravity AI Agent Workflow Starter Kit** designed for immediate drop-in adoption by any software project — featuring **3-Tier Auto Triage & Auto-Swarm**, **Auto Effort & Quota Pool Priority**, **Dirty Working Tree Swarm Safety**, **6-Event Lifecycle Hooks**, **Dynamic Python `run_workflow`**, **Rolling 15 Checkpoints ($O(1)$ Rehydration)**, **Zero-Dependency Pure-Python Verification/Backup/Diff CLI**, and **33 explicit `{{PLACEHOLDERS}}`** for your project's objectives, tasks, commands, and constraints.
+A portable, project-agnostic **Antigravity AI Agent Workflow Starter Kit** designed for immediate drop-in adoption by any software project — featuring **3-Tier Auto Triage & Auto-Swarm**, **Auto Effort & Quota Pool Priority**, **Dirty Working Tree Swarm Safety**, **6-Event Lifecycle Hooks**, **Dynamic Python `run_workflow`**, **Rolling 15 Checkpoints ($O(1)$ Rehydration) + New-Window `/handoff`**, **ISO 8601 UTC Microsecond Timestamps**, **Zero-Dependency Pure-Python Verification/Backup/Diff CLI**, and **33 explicit `{{PLACEHOLDERS}}`** for your project's objectives, tasks, commands, and constraints.
 
 ### Why This Workflow Exists
 
@@ -63,6 +65,8 @@ Antigravity-Agent-Workflow-with-Auto-Swarm/
 ├── LICENSE                                # GNU General Public License v3.0 (GPL-3.0)
 ├── .gitignore                             # Excludes local backups, caches, secrets & alerts
 ├── .github/
+│   ├── FUNDING.yml                        # GitHub repository Sponsor button (Ko-fi)
+│   ├── assets/                            # Sponsor QR codes (Ko-fi & PromptPay)
 │   ├── workflows/ci.yml                   # Automated CI: verify_workflow.py + unittest (Linux & Windows)
 │   ├── ISSUE_TEMPLATE/                    # Bug report & feature request templates
 │   └── PULL_REQUEST_TEMPLATE.md           # PR verification checklist
@@ -81,7 +85,7 @@ Antigravity-Agent-Workflow-with-Auto-Swarm/
 │   ├── hooks.json                         # SessionStart, PreToolUse, PostToolUse, opt-in Stop (CWD = .agents/)
 │   ├── scripts/                           # Pure Python 3.10+ stdlib (zero external dependencies)
 │   │   ├── workflow_hooks.py              # Lifecycle hook handler (camelCase JSON stdin/stdout)
-│   │   ├── workflow_ops.py                # backup, diff (-U1), log-turn, checkpoints, check-placeholders
+│   │   ├── workflow_ops.py                # backup, diff (-U1), log-turn, handoff, checkpoints, check-placeholders
 │   │   ├── verify_workflow.py             # Self-contained workflow schema & hygiene auditor
 │   │   └── test_workflow_ops_and_hooks.py # Deterministic unittest suite for hooks & ops
 │   ├── workflows/                         # Dynamic run_workflow starter (Python + JSON args schema)
@@ -103,6 +107,17 @@ python .agents/scripts/verify_workflow.py
 python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 ```
 
+### Support This Project
+
+If this workflow saves you time or helps your team ship faster, you can support ongoing development via **Ko-fi** or **PromptPay**:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F6V72AZBUH)
+
+| Ko-fi QR Code | PromptPay QR Code (Thailand) |
+| :---: | :---: |
+| <img src="./.github/assets/qr-kofi.png" alt="Ko-fi QR Code" width="200" /> | <img src="./.github/assets/qr-promptpay.jpg" alt="PromptPay QR Code" width="200" /> |
+| [ko-fi.com/F6V72AZBUH](https://ko-fi.com/F6V72AZBUH) | Scan with any Thai banking app |
+
 ### License
 
 This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)** — see [LICENSE](./LICENSE) for full terms.
@@ -111,7 +126,7 @@ This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**
 
 ## ภาษาไทย
 
-**ชุดเวิร์กโฟลว์ AI Agent สำเร็จรูปสำหรับ Antigravity (Starter Kit)** ที่นำไปวางใช้ได้ทันทีกับทุกโปรเจกต์ซอฟต์แวร์ มาพร้อม **3-Tier Auto Triage และ Auto-Swarm**, **Auto Effort และการเรียงลำดับโควตา Pool**, **เกราะกันงานแก้ค้างหายบน `swarm` (Dirty Working Tree Safety)**, **Lifecycle Hooks ครบ 6 อีเวนต์**, **Dynamic Python `run_workflow`**, **Rolling 15 Checkpoints (ฟื้นฟูบริบทแบบ $O(1)$)**, **เครื่องมือตรวจสอบ/สำรองไฟล์/สร้าง Diff ด้วย Pure Python ที่ไม่ต้องลงแพ็กเกจเพิ่ม**, และ **`{{PLACEHOLDERS}}` ชัดเจนทั้ง `33` ตัว** สำหรับเติมเป้าหมาย งานหลัก คำสั่งรัน/เทสต์ และข้อจำกัดเฉพาะของแต่ละโปรเจกต์
+**ชุดเวิร์กโฟลว์ AI Agent สำเร็จรูปสำหรับ Antigravity (Starter Kit)** ที่นำไปวางใช้ได้ทันทีกับทุกโปรเจกต์ซอฟต์แวร์ มาพร้อม **3-Tier Auto Triage และ Auto-Swarm**, **Auto Effort และการเรียงลำดับโควตา Pool**, **เกราะกันงานแก้ค้างหายบน `swarm` (Dirty Working Tree Safety)**, **Lifecycle Hooks ครบ 6 อีเวนต์**, **Dynamic Python `run_workflow`**, **Rolling 15 Checkpoints (ฟื้นฟูบริบทแบบ $O(1)$) + คำสั่ง `/handoff` ย้ายหน้าต่างแชตใหม่คู่กับ `/compact`**, **มาตรฐานเวลา ISO 8601 UTC Microsecond**, **เครื่องมือตรวจสอบ/สำรองไฟล์/สร้าง Diff ด้วย Pure Python ที่ไม่ต้องลงแพ็กเกจเพิ่ม**, และ **`{{PLACEHOLDERS}}` ชัดเจนทั้ง `33` ตัว** สำหรับเติมเป้าหมาย งานหลัก คำสั่งรัน/เทสต์ และข้อจำกัดเฉพาะของแต่ละโปรเจกต์
 
 ### จุดเด่นของเวิร์กโฟลว์นี้
 
@@ -144,6 +159,17 @@ This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**
    python -m unittest discover -s .agents/scripts -p "test_*.py" -v
    ```
 5. **เริ่มทำงานใน Antigravity:** เปิดโปรเจกต์แล้วพิมพ์ `/vibe <เป้าหมายของคุณ>` — อ่านคู่มือฉบับเต็ม (การทำงาน, ความสามารถ, คำสั่งทั้งหมด, และสิ่งที่โปรเจกต์ใหม่ **ต้องมี / ต้องเตรียม / ต้องทำ**) ได้ที่ [MANUAL_TH.md](./MANUAL_TH.md)
+
+### สนับสนุนโปรเจกต์ (Sponsor)
+
+หากเวิร์กโฟลว์นี้ช่วยให้คุณทำงานได้เร็วและเป็นระบบขึ้น สามารถร่วมสนับสนุนการพัฒนาต่อยอดได้ผ่าน **Ko-fi** หรือ **พร้อมเพย์ (PromptPay)**:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/F6V72AZBUH)
+
+| QR Code Ko-fi | QR Code พร้อมเพย์ (PromptPay) |
+| :---: | :---: |
+| <img src="./.github/assets/qr-kofi.png" alt="Ko-fi QR Code" width="200" /> | <img src="./.github/assets/qr-promptpay.jpg" alt="PromptPay QR Code" width="200" /> |
+| [ko-fi.com/F6V72AZBUH](https://ko-fi.com/F6V72AZBUH) | สแกนผ่านแอปธนาคารในประเทศไทย |
 
 ### ร่วมพัฒนา (Contributing) และสัญญาอนุญาต (License)
 
