@@ -46,6 +46,10 @@ class TestWorkflowOps(unittest.TestCase):
             self.assertIn("-# Old", diff_text)
             self.assertIn("+# New", diff_text)
             self.assertIn("+hello", diff_text)
+            with tempfile.TemporaryDirectory() as ext_tmp:
+                ext_out = Path(ext_tmp) / "outside.diff"
+                workflow_ops.run_diff(backup_dir=bdir, output=ext_out, repo_root=root)
+                self.assertTrue(ext_out.is_file())
 
     def test_log_turn_and_rolling_15_checkpoints(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

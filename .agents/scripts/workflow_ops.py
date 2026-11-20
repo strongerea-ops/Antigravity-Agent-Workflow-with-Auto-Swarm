@@ -142,10 +142,14 @@ def run_diff(
 
     diff_text = ("\n".join(diff_lines) + "\n") if diff_lines else ""
     if output is not None:
-        out_path = output if output.is_absolute() else root / output
+        out_path = (output if output.is_absolute() else root / output).resolve()
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(diff_text, encoding="utf-8")
-        print(f"[Diff] Wrote {len(diff_lines)} lines to {out_path.relative_to(root).as_posix()}")
+        try:
+            display_out = out_path.relative_to(root).as_posix()
+        except ValueError:
+            display_out = out_path.as_posix()
+        print(f"[Diff] Wrote {len(diff_lines)} lines to {display_out}")
     elif diff_text:
         print(diff_text, end="")
     else:
