@@ -9,9 +9,11 @@ description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), context qu
 
 ## 1. Tri-Tier Context Quota, `/compact` & `/handoff` (`/compact`, `/handoff`, `/ck`)
 1. **Tier 1 — Output Pruning:** Strip noisy raw logs and boilerplate; report unified diffs (`-U1`) and exact pass/fail summaries.
-2. **Tier 2 — Proactive `/compact` or `/handoff` Alert:** When `<CONTEXT_SUMMARY>` appears or a conversation reaches `10–12` turns (`~35` tool calls), confirm checkpoint $t_0$ is saved and offer both:
-   - **`/compact`** — stay in the **same chat window** with compacted history, OR
-   - **`/handoff`** — hand off cleanly to a **brand-new chat window** with zero stale context.
+2. **Tier 2 — Proactive `/compact` or `/handoff` Clickable Menu (`ask_question`):** When `<CONTEXT_SUMMARY>` appears or a conversation reaches `10–12` turns (`~35` tool calls), confirm checkpoint $t_0$ is saved and present a clickable `ask_question` menu offering:
+   - **`/handoff` (Recommended)** — run `workflow_ops.py handoff` immediately on click to move cleanly to a **brand-new chat window** with zero stale context,
+   - **`/compact`** — stay in the **same chat window** with compacted history (remind the user to type `/compact` in chat, as native UI slash commands cannot be executed programmatically), OR
+   - **Continue as-is** for now.
+   *(Similarly, whenever proactively introducing other relevant workflow or native slash commands, offer clickable `ask_question` choices with plain-language explanations.)*
 3. **Tier 3 — New-Window `/handoff` & $O(1)$ Rehydration:**
    - Opening a new window is a UI action (`New Conversation`), while `/handoff` automates everything else: run `python .agents/scripts/workflow_ops.py handoff --objective "..." [--completed ...] [--settled ...] [--next ...] [--blockers ...] [--touched ...]`.
    - `workflow_ops.py handoff` writes `.agents/ck/HANDOFF.md` + a dated archive under `artifacts/handoffs/YYYY-MM-DD/YYYYMMDDTHHMMSSffffffZ_handoff.md` (auto-indexed in `artifacts/handoffs/README.md`), sets `status: "HANDOFF_READY"` + `active_handoff` in `.agents/ck/context.json`, and prints a **Ready-to-Paste New-Window Starter Prompt**.
