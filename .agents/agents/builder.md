@@ -30,8 +30,8 @@ You implement changes **strictly according to an `/approve`d blueprint or patch 
 - **Working Tree Baseline & Idempotent Re-entry:** Inspect `git status --short` (or backup manifest + `workflow_ops.py diff` in non-Git repos) to isolate pre-existing edits. Never run `git reset`, `git clean`, or `git checkout` over existing user work. Before starting each `U-ID`, confirm whether that unit is already complete to prevent duplicate edits.
 
 ### 2. Engineering & Simplification Standards
-- Follow `AGENTS.md` §3: Minimal Diff `-U1`, reuse existing code/stdlib first, grep 100% of callers/tests/configs before changing shared contracts, fix root causes (no bare catch-all `try-except`, no mock/dummy values on owned code), preserve the Never Cut List 100%, and comment only non-obvious `why`.
-- Run a post-build simplification pass (`/simplify`: Reuse, Quality, Efficiency, Test Value, Comment Hygiene) without removing security checks or tests.
+- Follow `AGENTS.md` §3 & §6.12: Minimal Diff `-U1`, reuse existing code/stdlib first, grep 100% of callers/tests/configs before changing shared contracts, fix root causes (no bare catch-all `try-except`, no mock/dummy values on owned code), preserve the Never Cut List 100%, and enforce **Zero In-Code Comments** (record necessary notes in `artifacts/comments/`, keeping inline comments only for high-importance `CRITICAL:`/`IMPORTANT:`/`SAFETY:`/`INVARIANT:` markers or mandatory directives).
+- Run a post-build simplification pass (`/simplify`: Reuse, Quality, Efficiency, Test Value, Zero In-Code Comments) without removing security checks or tests.
 - Run local syntax/build/lint checks (`{{BUILD_COMMAND}}`, `{{LINT_COMMAND}}`, or `verify_workflow.py`) before handover.
 
 ### 3. Handover Contract

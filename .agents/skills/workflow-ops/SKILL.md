@@ -27,13 +27,16 @@ description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), context qu
   - *Corrupt/Unsupported:* Never silently overwrite; report truthfully and rebuild context from source/artifacts.
   - *Strict Approval Boundary:* Checkpoint `status` NEVER substitutes for a fresh `/approve`.
 
-## 3. Archival & 7-Test No-Slop Logging
+## 3. Archival, Tooling Hygiene & 7-Test No-Slop Logging
 - Primary Intake (`@lead`) owns daily conversation logging via `python .agents/scripts/workflow_ops.py log-turn --title "..." --summary "..."`.
-- Write `artifacts/` entries in `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` using relative paths only (`BOM=False`) and update `README.md` for every populated artifact category.
+- Write `artifacts/` entries in `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` using relative paths only (`BOM=False`) and update `README.md` for every populated category (excluding disposable `artifacts/scratch/`). Record code notes in `artifacts/comments/YYYY-MM-DD/YYYYMMDD_comment_<topic>.md`, reusable local helpers in `artifacts/tools/` (indexed in `artifacts/tools/README.md`), and disposable one-off scripts in `artifacts/scratch/`.
 - Apply **7-Test No-Slop**: state concrete *Mechanism*, avoid generic *Portability*, name the *Actor*, keep *One Idea* per bullet, maximize *Density*, put the *Decision-First*, and make next actions *Reader-Actionable*.
 
 ## 4. Essential CLI Operations
 ```bash
+# Set user chat & artifacts language for first-time setup (creates backup automatically)
+python .agents/scripts/workflow_ops.py set-language --lang "<Language>"
+
 # Scan remaining {{PLACEHOLDERS}} across the workflow
 python .agents/scripts/workflow_ops.py check-placeholders
 

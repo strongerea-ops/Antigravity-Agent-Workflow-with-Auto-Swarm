@@ -10,7 +10,7 @@ import argparse
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -149,37 +149,163 @@ def _has_today_backup(rel_path: str, repo_root: Path, today_str: Optional[str] =
     return False
 
 
-def handle_session_start(payload: Dict[str, Any], repo_root: Optional[Path] = None) -> Dict[str, Any]:
-    """Injects an O(1) checkpoint summary systemMessage if .agents/ck/context.json exists."""
-    del payload  # Common metadata not required for local checkpoint lookup
-    root = (repo_root or REPO_ROOT).resolve()
-    ck_path = root / ".agents" / "ck" / "context.json"
-    if not ck_path.is_file():
-        return {}
+CHAT_LANG_PLACEHOLDER = "{{CHAT_AND_ARTIFACTS_LANGUAGE}}"
+DATE_ISO_RE = re.compile(r"\b(\d{4}-\d{2}-\d{2})\b")
+MD_LINK_LABEL_RE = re.compile(r"\[([^\]]+)\]")
+RESOLVED_BUG_MARKERS = (
+    "🟢",
+    "✅",
+    "resolved",
+    "closed",
+    "fixed",
+    "แก้ไขสมบูรณ์",
+    "แก้ไขแล้ว",
+)
+UNRESOLVED_BUG_MARKERS = (
+    "🔴",
+    "🟡",
+    "open",
+    "unresolved",
+    "pending",
+    "fail",
+    "รอแก้ไข",
+    "รอแก้",
+    "เปิดไว้",
+)
+
+
+def _needs_first_time_language_setup(repo_root: Path) -> bool:
+    agents_md = repo_root / "AGENTS.md"
+    if not agents_md.is_file():
+        return False
     try:
-        ck = json.loads(ck_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    if not isinstance(ck, dict):
-        return {}
+        return CHAT_LANG_PLACEHOLDER in agents_md.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+
+
+def _find_stale_recent_bug_reports(
+    repo_root: Path,
+    today: Optional[date] = None,
+    min_age_days: int = 3,
+    max_age_days: int = 7,
+) -> List[str]:
+    """Scans artifacts/bug-reports/README.md for unresolved reports aged (min_age_days, max_age_days]."""
+    readme_path = repo_root / "artifacts" / "bug-reports" / "README.md"
+    if not readme_path.is_file():
+        return []
+    try:
+        content = readme_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        print(f"[workflow_hooks] Failed reading {readme_path}: {exc}", file=sys.stderr)
+        return []
+
+    ref_day = today or datetime.now(timezone.utc).date()
+    stale_items: List[str] = []
+    seen: set[str] = set()
+
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        date_match = DATE_ISO_RE.search(line)
+        if not date_match:
+            continue
+        try:
+            entry_date = date.fromisoformat(date_match.group(1))
+        except ValueError:
+            continue
+        age_days = (ref_day - entry_date).days
+        if not (min_age_days < age_days <= max_age_days):
+            continue
+
+        lowered = line.lower()
+        if any(marker in lowered for marker in RESOLVED_BUG_MARKERS):
+            continue
+        if not any(marker in lowered for marker in UNRESOLVED_BUG_MARKERS):
+            continue
+
+        label = ""
+        if line.startswith("|"):
+            cells = [c.strip().strip("`") for c in line.split("|")]
+            if len(cells) >= 3 and cells[2]:
+                label = cells[2]
+        if not label:
+            link_match = MD_LINK_LABEL_RE.search(line)
+            if link_match:
+                label = link_match.group(1).strip()
+        if not label:
+            label = line[:60]
+
+        entry_summary = f"{entry_date.isoformat()} ({age_days}d): {label}"
+        if entry_summary not in seen:
+            seen.add(entry_summary)
+            stale_items.append(entry_summary)
+
+    return stale_items
+
+
+def handle_session_start(
+    payload: Dict[str, Any],
+    repo_root: Optional[Path] = None,
+    today: Optional[date] = None,
+) -> Dict[str, Any]:
+    """Injects first-time language onboarding, O(1) checkpoint/handoff summary, and 3-7d bug reminders on SessionStart."""
+    del payload
+    root = (repo_root or REPO_ROOT).resolve()
+    parts: List[str] = []
+
+    if _needs_first_time_language_setup(root):
+        parts.append(
+            f"[First-Time Setup — Language Selection] {CHAT_LANG_PLACEHOLDER} is not configured yet. "
+            "Before proceeding with other tasks, present a clickable ask_question menu asking the user to choose "
+            "their preferred language for chat replies and artifacts/ (e.g., English, Thai, Japanese, Chinese, or Other), "
+            'then apply it with: python .agents/scripts/workflow_ops.py set-language --lang "<Language>".'
+        )
+
+    stale_bugs = _find_stale_recent_bug_reports(root, today=today)
+    bug_note = ""
+    if stale_bugs:
+        bug_note = (
+            f" Unresolved recent bug reports (3-7d): {'; '.join(stale_bugs)} "
+            "— remind the user to address them."
+        )
+
+    ck_path = root / ".agents" / "ck" / "context.json"
+    ck: Dict[str, Any] = {}
+    if ck_path.is_file():
+        try:
+            loaded = json.loads(ck_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                ck = loaded
+        except (OSError, json.JSONDecodeError):
+            ck = {}
+
     objective = str(ck.get("active_objective") or "").strip()
-    status = str(ck.get("status") or "UNKNOWN").strip()
-    saved_at = str(ck.get("saved_at") or "").strip()
-    if not objective:
+    if objective:
+        status = str(ck.get("status") or "UNKNOWN").strip()
+        saved_at = str(ck.get("saved_at") or "").strip()
+        active_handoff = str(ck.get("active_handoff") or "").strip()
+        handoff_note = ""
+        if status == "HANDOFF_READY" and active_handoff and (root / active_handoff).is_file():
+            handoff_note = (
+                f" Active handoff packet waiting at `{active_handoff}` — "
+                "read it first to resume in this new window."
+            )
+        parts.append(
+            f"[O(1) Rehydration] Latest checkpoint ({saved_at}, status={status}): {objective}.{handoff_note}{bug_note} "
+            "Verify current files before acting; checkpoint/handoff status is never /approve."
+        )
+    elif bug_note:
+        parts.append(f"[Bug Reminder]{bug_note}")
+
+    if not parts:
         return {}
-    active_handoff = str(ck.get("active_handoff") or "").strip()
-    handoff_note = ""
-    if status == "HANDOFF_READY" and active_handoff and (root / active_handoff).is_file():
-        handoff_note = f" Active handoff packet waiting at `{active_handoff}` — read it first to resume in this new window."
-    msg = (
-        f"[O(1) Rehydration] Latest checkpoint ({saved_at}, status={status}): {objective}.{handoff_note} "
-        "Verify current files before acting; checkpoint/handoff status is never /approve."
-    )
     return {
         "injectSteps": [
             {
                 "systemMessage": {
-                    "systemMessage": msg,
+                    "systemMessage": " ".join(parts),
                 }
             }
         ]

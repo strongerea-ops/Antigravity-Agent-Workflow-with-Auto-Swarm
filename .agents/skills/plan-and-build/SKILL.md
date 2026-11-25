@@ -22,16 +22,16 @@ For new features, architectural changes, or multi-file tasks, write a blueprint 
 
 ## 3. Supreme Approval Gate (`/approve`)
 Before editing source code or workflow architecture, present:
-1. Atomic steps (`U-IDs`) and exact target files.
+1. Atomic steps (`U-IDs`), exact target files, and clear **Acceptance Criteria** bullets (for open-ended or multi-interpretation tasks).
 2. Conflict/Redundancy audit results (halt immediately if found).
-3. Pros/Cons **only** for divergent architectural options (bundle compatible items into one plan).
-4. Explicit request for `/approve` (respecting `session-settled:` user choices).
+3. Pros/Cons **only** for divergent architectural options (bundle compatible items) and proactively propose any better approach with merit & feasibility evaluation.
+4. A clickable `ask_question` menu (`Approve (/approve)` / `Cancel`, or all proposed options) and await explicit `/approve` (respecting `session-settled:` user choices). On any agent mistake, propose a preventive rule for `AGENTS.md`/`.agents/` and obtain `/approve` first.
 
 ## 4. Build & Simplify (`/code`, `/simplify`)
 1. **Pre-Action Backup:** Run `python .agents/scripts/workflow_ops.py backup --topic "<topic>" <files...>` before modifying protected files.
 2. **Baseline & Idempotent Re-entry:** Check `git status --short` (or backup manifest in non-Git repos); never revert pre-existing user changes; skip units already satisfied.
-3. **Minimal Diff Implementation:** Smallest Complete Change, 100% caller updates, root-cause fixes, zero mock data on owned code, `BOM=False`, relative paths only.
-4. **Post-Build Simplification (`/simplify`):** Pass changes through `5` lenses — **Reuse**, **Quality**, **Efficiency**, **Test Value**, and **Comment Hygiene** (keep only non-obvious `why` comments) — without weakening validations or tests.
+3. **Minimal Diff Implementation:** Smallest Complete Change, 100% caller updates, root-cause fixes, zero mock data on owned code, Zero In-Code Comments (`artifacts/comments/`), `BOM=False`, relative paths only.
+4. **Post-Build Simplification (`/simplify`):** Pass changes through `5` lenses — **Reuse**, **Quality**, **Efficiency**, **Test Value**, and **Zero In-Code Comments** (relocate any necessary notes to `artifacts/comments/YYYY-MM-DD/YYYYMMDD_comment_<topic>.md`; keep inline comments only for high-importance safety/invariant markers or mandatory directives) — without weakening validations or tests.
 
 ## 5. Post-Approval Auto-Fix & Closure (`/finalize`)
 - **Post-Approval Auto-Fix:** If `@verifier` reports a defect strictly inside approved scope with zero Conflict/Redundancy, `@lead` may dispatch `@builder` again without re-asking `/approve` (respecting Circuit Breaker $N \ge 3$).

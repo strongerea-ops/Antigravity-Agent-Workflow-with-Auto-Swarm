@@ -94,7 +94,7 @@ def audit_workspace(root: Path) -> List[str]:
     agents_md = root / "AGENTS.md"
     agents_dir = root / ".agents" / "agents"
     skills_dir = root / ".agents" / "skills"
-    rules_md = root / ".agents" / "rules" / "rules.md"
+    rules_dir = root / ".agents" / "rules"
     hooks_json = root / ".agents" / "hooks.json"
     scripts_dir = root / ".agents" / "scripts"
     workflows_dir = root / ".agents" / "workflows"
@@ -125,8 +125,8 @@ def audit_workspace(root: Path) -> List[str]:
     for doc_path in sorted(root.glob("*.md")):
         if doc_path.is_file():
             md_files.append(doc_path)
-    if rules_md.is_file():
-        md_files.append(rules_md)
+    if rules_dir.is_dir():
+        md_files.extend(sorted(rules_dir.glob("*.md")))
     if agents_dir.is_dir():
         md_files.extend(sorted(agents_dir.glob("*.md")))
     if skills_dir.is_dir():
@@ -306,7 +306,7 @@ def audit_workspace(root: Path) -> List[str]:
         root_readme = artifacts_dir / "README.md"
         root_readme_text = root_readme.read_text(encoding="utf-8") if root_readme.is_file() else ""
         for cat_dir in sorted(artifacts_dir.iterdir()):
-            if not cat_dir.is_dir():
+            if not cat_dir.is_dir() or cat_dir.name == "scratch":
                 continue
             cat_files = [p for p in sorted(cat_dir.rglob("*")) if p.is_file() and p.name != "README.md"]
             if not cat_files:

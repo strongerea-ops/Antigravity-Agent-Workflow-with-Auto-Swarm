@@ -19,7 +19,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 | Layer | File / Folder | Functionality |
 |---|---|---|
 | **1. Root Contract** | [AGENTS.md](./AGENTS.md) | Always-loaded rule index ($\le 24\text{ KB}$): language policy, commands, hard constraints, 4-role model matrix, and global directives `0–12`. |
-| **2. Extended Rules** | [.agents/rules/rules.md](./.agents/rules/rules.md) | Non-redundant operational rules: high-blast-radius modules, dirty-tree `swarm` safety, `/approve` + `Post-Approval Auto-Fix`, and rollback semantics. |
+| **2. Task-Based Rules (`4` files)** | [.agents/rules/rules.md](./.agents/rules/rules.md) | Task-categorized index routing agents to only the matching rule file (`coding-and-safety.md`, `commands-and-tools.md`, `agents-and-handoff.md`). |
 | **3. Custom Agents (`4`)** | `.agents/agents/*.md` | 10-element role definitions (`@lead`, `@builder`, `@verifier`, `@researcher`) cleanly separating planning, editing, read-only auditing, and low-cost discovery. |
 | **4. On-Demand Skills (`4`)** | `.agents/skills/*/SKILL.md` | Progressive-disclosure playbooks ($\le 300$ lines each) loaded **only** when triggered, preventing context bloat. |
 | **5. Lifecycle Hooks & Stdlib CLI** | [.agents/hooks.json](./.agents/hooks.json), `.agents/scripts/*.py` | Zero-dependency Python 3.10+ automation executing at lifecycle events: startup checkpoint rehydration, pre-edit backup blocking, forbidden-command blocking, post-edit hygiene checks, diffs, and unit self-tests. |
@@ -30,7 +30,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 | Mechanism | Enforcement Level | Actual Runtime Behavior |
 |---|---|---|
 | `AGENTS.md` `24,000`-byte cap & hierarchical discovery | **Antigravity Runtime (Hard)** | Truncated above 24 KB; walks up from any opened file to workspace root. |
-| `SessionStart` checkpoint injection (`hooks.json`) | **Hook Script (Hard)** | Runs `scripts/workflow_hooks.py session-start` with CWD = `.agents/` and injects a $t_0$ pointer whenever `.agents/ck/context.json` exists. |
+| `SessionStart` onboarding, checkpoint & bug check (`hooks.json`) | **Hook Script (Hard)** | Runs `scripts/workflow_hooks.py session-start` with CWD = `.agents/` to detect unfilled `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` (first-time setup), inject the $t_0$ checkpoint/handoff pointer, and flag unresolved `3–7` day bug reports in `artifacts/bug-reports/README.md`. |
 | `PreToolUse` backup & forbidden-command guard | **Hook Script (Hard)** | Deterministically returns `decision: "deny"` before `edit_file`/`write_file` if today's backup manifest is missing, or before `run_command` matching configured forbidden regexes. |
 | `PostToolUse` workflow audit (`last_alert.log`) | **Hook Script (Hard)** | Runs `verify_workflow.audit_workspace()` after editing workflow files; writes or removes `.agents/ck/last_alert.log`. |
 | `Stop` alert gate (`alert-stop-gate`, opt-in) | **Hook Script (Hard when enabled)** | Disabled by default (`"enabled": false`); checks `continuationActive` to prevent infinite retry loops. |
@@ -42,8 +42,8 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 
 ## 2. All Capabilities
 
-1. **Language Split for Token Conservation:** System docs (`AGENTS.md`, `.agents/`) and internal thinking remain in **English** to minimize token usage, while user conversations and `artifacts/` records adapt to `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` (e.g., `Thai` or `English`).
-2. **Default `no-code / no-detail` Interaction + Smart Detail Expansion:** General Q&A and status checks return `3–5` concise principle-first bullets without code snippets or untouched file lists. Full technical detail activates automatically during **planning** (pre-`/approve`), **code implementation** (3-part summary + modified file links + `.diff`), or on `/more-detail`.
+1. **First-Time Language Selection & Token-Saving Language Split:** On first run while `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` is unfilled, `SessionStart` automatically prompts `@lead` to show a clickable `ask_question` language picker and run `workflow_ops.py set-language --lang "<Language>"` (with automatic backup). System docs (`AGENTS.md`, `.agents/`) and internal thinking stay in **English** to conserve tokens, while chat replies and `artifacts/` use the chosen language in plain, non-programmer-friendly wording.
+2. **Default `no-code / no-detail` Interaction, Smart Detail Expansion & Action Verdicts:** General Q&A and status checks return `3–5` concise principle-first bullets without code snippets or untouched file lists. Full technical detail activates automatically during **planning** (pre-`/approve` with clickable `ask_question` menus, proactive better-approach proposals, and Acceptance Criteria), **code implementation** (3-part summary + modified file links + `.diff`), or on `/more-detail`. Pre-decision analyses/tests close with a brief **Action Recommendation Verdict** stating whether or not to proceed and why.
 3. **Progressive Disclosure, `/compact` & New-Window `/handoff`:** Skills load on demand; large file reads stay sliced (`<= 300` lines); upon `10–12` turns (`~35` calls) or `<CONTEXT_SUMMARY>`, `@lead` offers **`/compact`** (continue in this window) or **`/handoff`** (generate `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + ready-to-paste prompt for a fresh chat window automatically detected by `SessionStart`); $O(1)$ rehydration (~250 tokens) reads `Conversations/README.md` + `.agents/ck/context.json`.
 4. **3-Tier Auto Triage + Quota Pool Priority + Auto Effort:**
    - **Tier 0 In-line:** 1–2 line fixes or quick Q&A (`<= 3` reads) on warm cache.
@@ -54,7 +54,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 6. **6-Event Lifecycle Hooks (CWD = `.agents/`):** Pre-wired for `SessionStart`, `PreToolUse` (`edit_file|write_file` + `run_command`), `PostToolUse`, and opt-in `Stop` (`continuationActive` guard) in [.agents/hooks.json](./.agents/hooks.json), and extensible with `PreInvocation` / `PostInvocation`.
 7. **Dynamic Python Workflows (`run_workflow`):** Includes [.agents/workflows/project_fanout.py](./.agents/workflows/project_fanout.py) + [.agents/workflows/workflow.json](./.agents/workflows/workflow.json) using `phase`, `agent`, `parallel`, `log`, JSON `schema` enforcement, and `Args` schema validation.
 8. **Git-Optional Pre-Action Backup, `-U1` Diff & Rollback:** `workflow_ops.py backup` snapshots existing files with `SHA-256` and records newly created files as `"status": "absent"`; `workflow_ops.py diff` produces unified `-U1` diffs against the manifest even without `.git`.
-9. **Quality & Compound Learning Safeguards:** 4-step `/approve` gate, Read-Only `@verifier` separation, 3-part `Evidence-Based Objection`, `session-settled:` lock, `Attack the Premise` ($N=2$), `Circuit Breaker` ($N \ge 3$), and `Compound Learning` (`Test/Lint -> Rule -> Solution Doc`).
+9. **Quality, Hygiene & Compound Learning Safeguards:** 4-step `/approve` gate with clickable `ask_question` menus, Self-Mistake Governance (propose rule updates and obtain `/approve` on agent errors), Zero In-Code Comments (notes stored in `artifacts/comments/`), `artifacts/tools/` vs. disposable `artifacts/scratch/` hygiene, `3–7` day unresolved bug reminders, Read-Only `@verifier` separation, 3-part `Evidence-Based Objection`, `session-settled:` lock, `Attack the Premise` ($N=2$), `Circuit Breaker` ($N \ge 3$), and `Compound Learning` (`Test/Lint -> Rule -> Solution Doc`).
 10. **Opt-In MCP & Scheduled Automations:** Ready-to-adapt templates for **MCP** (Stdio + Streamable HTTP `/mcp`; legacy SSE unsupported) in [.agents/templates/mcp_config.example.json](./.agents/templates/mcp_config.example.json) and **Scheduled Cron Sidecars** (`"builtin": "schedule"`, `CRON_TZ`, `restart_policy: "always"`) in [.agents/templates/sidecar.schedule.example.json](./.agents/templates/sidecar.schedule.example.json).
 
 ---
@@ -113,6 +113,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 
 | Command | Purpose |
 |---|---|
+| `python .agents/scripts/workflow_ops.py set-language --lang "<Language>"` | Configure `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` across active workflow files (with automatic Pre-Action Backup) and record `chat_language` in `context.json`. |
 | `python .agents/scripts/workflow_ops.py check-placeholders` | List every unfilled `{{PLACEHOLDER}}` across active workflow files with file:line locations. |
 | `python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found` | Same scan, returning `Exit 1` if any placeholder remains (readiness/CI gate). |
 | `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | Create microsecond Pre-Action Backup + SHA-256 `manifest.json` under `backup/`. |
@@ -138,7 +139,7 @@ This workflow organizes AI-assisted engineering into **six cooperating layers** 
 
 ## 4. End-to-End Session Walkthrough
 
-1. **Start Session:** `SessionStart` hook injects the latest checkpoint from `.agents/ck/context.json`; `@lead` reads the top `3` lines of `artifacts/Conversations/README.md` ($O(1)$ rehydration).
+1. **Start Session (First-Time Language Setup & Rehydration):** On first launch before `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` is set, `SessionStart` triggers a clickable `ask_question` language picker and saves the selection via `workflow_ops.py set-language`. On subsequent sessions, `SessionStart` injects the latest checkpoint/handoff pointer plus any `3–7` day unresolved bug reminders while `@lead` reads the top `3` lines of `artifacts/Conversations/README.md` ($O(1)$ rehydration).
 2. **Request Work:** User types `/vibe <task>` (or asks a general question which `@lead` answers in `3–5` concise `no-code / no-detail` bullets).
 3. **Plan & Gate:** `@lead` (with `@researcher` when needed) inspects real files, checks Conflict/Redundancy, writes a blueprint (`U1, U2...`), compares Pros/Cons only on divergent paths, and awaits `/approve`.
 4. **Backup & Build:** After `/approve`, `@builder` runs `workflow_ops.py backup`, applies Minimal Diff `-U1` edits (`PreToolUse` enforces backup; `PostToolUse` verifies workflow hygiene), and runs `/simplify`.
@@ -214,11 +215,12 @@ Gather the decisions below before setup. Every entry maps 1-to-1 with the **`33`
 
 1. **Copy Workflow Into Your Project Root:** Copy `AGENTS.md`, `MANUAL_EN.md` (and/or `MANUAL_TH.md`), `.agents/`, and `artifacts/` directly into the root directory of your new project. Do not nest it inside another workspace that already has an `AGENTS.md` (hierarchical discovery stacks both). Add `backup/` and `.agents/ck/last_alert.log` to `.gitignore`.
 2. **Verify Python Alias:** Confirm `python --version` (`3.10+`). On Linux/macOS where only `python3` exists, update `"python scripts/workflow_hooks.py ..."` in [.agents/hooks.json](./.agents/hooks.json) to `"python3 scripts/workflow_hooks.py ..."` — keep `scripts/workflow_hooks.py` relative to `.agents/` because Antigravity executes hooks with **CWD = `.agents/`**.
-3. **Scan and Fill All Placeholders:**
+3. **Select Language & Fill Remaining Placeholders:**
    ```bash
+   python .agents/scripts/workflow_ops.py set-language --lang "English"   # or select via first-run chat prompt
    python .agents/scripts/workflow_ops.py check-placeholders
    ```
-   Populate [AGENTS.md](./AGENTS.md), [.agents/rules/rules.md](./.agents/rules/rules.md), [.agents/skills/project-tasks/SKILL.md](./.agents/skills/project-tasks/SKILL.md), the agent/skill command references, [.agents/scripts/workflow_hooks.py](./.agents/scripts/workflow_hooks.py), [.agents/ck/context.json](./.agents/ck/context.json), and [artifacts/README.md](./artifacts/README.md). Copy `.agents/templates/*` to `~/.gemini/config/` only when enabling MCP or scheduled sidecars (or delete unused template files so `--fail-on-found` passes `Exit 0`).
+   Populate [AGENTS.md](./AGENTS.md), `.agents/rules/*.md`, [.agents/skills/project-tasks/SKILL.md](./.agents/skills/project-tasks/SKILL.md), the agent/skill command references, [.agents/scripts/workflow_hooks.py](./.agents/scripts/workflow_hooks.py), [.agents/ck/context.json](./.agents/ck/context.json), and [artifacts/README.md](./artifacts/README.md). Copy `.agents/templates/*` to `~/.gemini/config/` only when enabling MCP or scheduled sidecars (or delete unused template files so `--fail-on-found` passes `Exit 0`).
 4. **Run Verification Gate (Must Exit `0`):**
    ```bash
    python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found

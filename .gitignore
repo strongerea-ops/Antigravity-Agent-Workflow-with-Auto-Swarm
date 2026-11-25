@@ -5,6 +5,7 @@ backup/
 
 # Temporary Scratch & Logs
 scratch/
+artifacts/scratch/
 *.log
 
 # Python Artifacts

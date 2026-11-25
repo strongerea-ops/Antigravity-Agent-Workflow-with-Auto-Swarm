@@ -4,9 +4,11 @@
 Portable Agent Workflow — Unified Operations CLI
 Pure Python 3.10+ Standard Library only.
 Commands:
+  set-language        Configure {{CHAT_AND_ARTIFACTS_LANGUAGE}} for first-time setup (with backup)
   backup              Pre-Action microsecond backup with SHA-256 manifest.json
   diff                Unified diff (-U1) against backup manifest (works without .git)
   log-turn            Append daily conversation log, update README, rotate Rolling 15 Checkpoints
+  handoff             Generate new-window handoff packet (.agents/ck/HANDOFF.md + artifacts/handoffs/)
   check-placeholders  Scan workflow templates for remaining {{PLACEHOLDER}} tokens
 """
 
@@ -471,17 +473,16 @@ def run_handoff(
     }
 
 
-def scan_placeholders(repo_root: Optional[Path] = None) -> Dict[str, List[Tuple[str, int]]]:
-    """Scans active workflow config, agent, skill, hook, workflow, and template files for {{PLACEHOLDERS}}."""
-    root = (repo_root or REPO_ROOT).resolve()
+CHAT_LANG_PLACEHOLDER = "{{CHAT_AND_ARTIFACTS_LANGUAGE}}"
+
+
+def _placeholder_target_files(root: Path) -> List[Path]:
     targets: List[Path] = []
     agents_md = root / "AGENTS.md"
     if agents_md.is_file():
         targets.append(agents_md)
-    rules_md = root / ".agents" / "rules" / "rules.md"
-    if rules_md.is_file():
-        targets.append(rules_md)
     for folder, pattern in (
+        (root / ".agents" / "rules", "*.md"),
         (root / ".agents" / "agents", "*.md"),
         (root / ".agents" / "skills", "*/SKILL.md"),
         (root / ".agents" / "workflows", "*"),
@@ -498,6 +499,62 @@ def scan_placeholders(repo_root: Optional[Path] = None) -> Dict[str, List[Tuple[
     ):
         if extra_file.is_file():
             targets.append(extra_file)
+    return targets
+
+
+def run_set_language(
+    language: str,
+    repo_root: Optional[Path] = None,
+    create_backup: bool = True,
+) -> Dict[str, Any]:
+    """Replaces {{CHAT_AND_ARTIFACTS_LANGUAGE}} across workflow files (with Pre-Action Backup) and records chat_language."""
+    lang = language.strip()
+    if not lang or "{{" in lang or "}}" in lang:
+        raise ValueError("Language must be a non-empty string without placeholder braces.")
+
+    root = (repo_root or REPO_ROOT).resolve()
+    candidates = [
+        p
+        for p in _placeholder_target_files(root)
+        if p.name != "workflow_hooks.py"
+        and CHAT_LANG_PLACEHOLDER in p.read_text(encoding="utf-8", errors="replace")
+    ]
+    updated_rel = [p.relative_to(root).as_posix() for p in candidates]
+    backup_dir: Optional[Path] = None
+    if updated_rel and create_backup:
+        backup_dir = run_backup(
+            topic="set_language",
+            files=updated_rel,
+            desc=f"Configure chat/artifacts language to {lang}",
+            repo_root=root,
+        )
+
+    for path in candidates:
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace(CHAT_LANG_PLACEHOLDER, lang), encoding="utf-8")
+
+    ck_path = root / ".agents" / "ck" / "context.json"
+    if ck_path.is_file():
+        try:
+            ck = json.loads(ck_path.read_text(encoding="utf-8"))
+            if isinstance(ck, dict):
+                ck["chat_language"] = lang
+                ck_path.write_text(json.dumps(ck, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    print(f"[Language] Set chat/artifacts language to '{lang}' across {len(updated_rel)} file(s).")
+    return {
+        "language": lang,
+        "updated_files": updated_rel,
+        "backup_dir": str(backup_dir) if backup_dir else None,
+    }
+
+
+def scan_placeholders(repo_root: Optional[Path] = None) -> Dict[str, List[Tuple[str, int]]]:
+    """Scans active workflow config, rule, agent, skill, hook, workflow, and template files for {{PLACEHOLDERS}}."""
+    root = (repo_root or REPO_ROOT).resolve()
+    targets = _placeholder_target_files(root)
 
     found: Dict[str, List[Tuple[str, int]]] = {}
     for path in targets:
@@ -506,7 +563,9 @@ def scan_placeholders(repo_root: Optional[Path] = None) -> Dict[str, List[Tuple[
         for idx, line in enumerate(text.splitlines(), 1):
             for match in PLACEHOLDER_RE.finditer(line):
                 token = match.group(0)
-                if token == "{{PLACEHOLDERS}}" or token == "{{PLACEHOLDER}}":
+                if token in ("{{PLACEHOLDERS}}", "{{PLACEHOLDER}}"):
+                    continue
+                if path.name == "workflow_hooks.py" and token == CHAT_LANG_PLACEHOLDER:
                     continue
                 found.setdefault(token, []).append((rel, idx))
     return dict(sorted(found.items()))
@@ -553,6 +612,11 @@ def build_parser() -> argparse.ArgumentParser:
     lg.add_argument("--role", default="[👑 @lead]", help="Active role tag")
     lg.add_argument("--repo-root", default=None, help="Override repository root")
 
+    sl = subparsers.add_parser("set-language", help="Configure chat/artifacts language for first-time setup")
+    sl.add_argument("--lang", required=True, help="Preferred user chat & artifacts language (e.g., English, Thai)")
+    sl.add_argument("--no-backup", action="store_true", help="Skip automatic Pre-Action Backup before replacing")
+    sl.add_argument("--repo-root", default=None, help="Override repository root")
+
     cp = subparsers.add_parser("check-placeholders", help="List remaining {{PLACEHOLDERS}} in workflow files")
     cp.add_argument("--fail-on-found", action="store_true", help="Exit 1 if unfilled placeholders remain")
     cp.add_argument("--repo-root", default=None, help="Override repository root")
@@ -595,6 +659,9 @@ def main(argv: Optional[List[str]] = None) -> int:
             role=args.role,
             repo_root=root,
         )
+        return 0
+    if args.command == "set-language":
+        run_set_language(language=args.lang, repo_root=root, create_backup=not args.no_backup)
         return 0
     if args.command == "check-placeholders":
         return run_check_placeholders(repo_root=root, fail_on_found=args.fail_on_found)

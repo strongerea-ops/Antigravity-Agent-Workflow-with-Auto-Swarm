@@ -10,6 +10,7 @@ import re
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 RFC3339_UTC_US_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
@@ -144,6 +145,42 @@ class TestWorkflowOps(unittest.TestCase):
             next_msg = next_out["injectSteps"][0]["systemMessage"]["systemMessage"]
             self.assertNotIn("Active handoff packet waiting", next_msg)
 
+    def test_set_language_backs_up_replaces_placeholder_and_clears_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".agents" / "rules").mkdir(parents=True)
+            (root / ".agents" / "ck").mkdir(parents=True)
+            (root / "artifacts").mkdir(parents=True)
+            (root / "AGENTS.md").write_text("Lang: {{CHAT_AND_ARTIFACTS_LANGUAGE}}\n", encoding="utf-8")
+            (root / ".agents" / "rules" / "coding-and-safety.md").write_text(
+                "Notes in {{CHAT_AND_ARTIFACTS_LANGUAGE}}\n", encoding="utf-8"
+            )
+            (root / "artifacts" / "README.md").write_text(
+                "Vault in {{CHAT_AND_ARTIFACTS_LANGUAGE}}\n", encoding="utf-8"
+            )
+            (root / ".agents" / "ck" / "context.json").write_text(
+                json.dumps({"active_objective": "Init", "status": "TEMPLATE_READY"}) + "\n",
+                encoding="utf-8",
+            )
+
+            before = workflow_hooks.handle_session_start({}, repo_root=root)
+            before_msg = before["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn("First-Time Setup — Language Selection", before_msg)
+
+            res = workflow_ops.run_set_language(language="Thai", repo_root=root)
+            self.assertEqual(res["language"], "Thai")
+            self.assertEqual(len(res["updated_files"]), 3)
+            self.assertIsNotNone(res["backup_dir"])
+            self.assertTrue((Path(res["backup_dir"]) / "manifest.json").is_file())
+            self.assertNotIn("{{CHAT_AND_ARTIFACTS_LANGUAGE}}", (root / "AGENTS.md").read_text(encoding="utf-8"))
+            self.assertIn("Thai", (root / ".agents" / "rules" / "coding-and-safety.md").read_text(encoding="utf-8"))
+            ck = json.loads((root / ".agents" / "ck" / "context.json").read_text(encoding="utf-8"))
+            self.assertEqual(ck["chat_language"], "Thai")
+
+            after = workflow_hooks.handle_session_start({}, repo_root=root)
+            after_msg = after["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertNotIn("First-Time Setup — Language Selection", after_msg)
+
 
 class TestWorkflowHooks(unittest.TestCase):
     def test_session_start_graceful_empty_and_rehydration(self) -> None:
@@ -155,6 +192,31 @@ class TestWorkflowHooks(unittest.TestCase):
             self.assertIn("injectSteps", out)
             msg = out["injectSteps"][0]["systemMessage"]["systemMessage"]
             self.assertIn("Finish API schema", msg)
+
+    def test_session_start_surfaces_3_to_7_day_unresolved_bug_reminders(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            bug_dir = root / "artifacts" / "bug-reports"
+            bug_dir.mkdir(parents=True)
+            (bug_dir / "README.md").write_text(
+                "\n".join(
+                    [
+                        "# Bug Reports",
+                        "- 2026-11-20 — 🔴 OPEN [Socket timeout bug](./2026-11-20/bug.md)",
+                        "- 2026-11-24 — 🔴 OPEN [Too fresh 1d bug](./2026-11-24/bug.md)",
+                        "- 2026-11-10 — 🔴 OPEN [Older than 7d bug](./2026-11-10/bug.md)",
+                        "- 2026-11-20 — 🟢 RESOLVED [Already fixed bug](./2026-11-20/fixed.md)",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            out = workflow_hooks.handle_session_start({}, repo_root=root, today=date(2026, 11, 25))
+            msg = out["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn("Socket timeout bug", msg)
+            self.assertNotIn("Too fresh 1d bug", msg)
+            self.assertNotIn("Older than 7d bug", msg)
+            self.assertNotIn("Already fixed bug", msg)
 
     def test_pre_tool_backup_and_custom_src_guard(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -251,6 +313,22 @@ class TestVerifyWorkflow(unittest.TestCase):
             errors = verify_workflow.audit_workspace(root)
             self.assertTrue(any("UTF-8 BOM" in e for e in errors))
             self.assertTrue(any("hardcoded drive letter" in e for e in errors))
+
+    def test_audit_scans_all_rule_files_and_skips_artifacts_scratch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".agents" / "skills").mkdir(parents=True)
+            (root / ".agents" / "rules").mkdir(parents=True)
+            (root / "artifacts" / "scratch").mkdir(parents=True)
+            (root / "AGENTS.md").write_text("# Clean\n", encoding="utf-8")
+            (root / "artifacts" / "README.md").write_text("# Artifacts\n", encoding="utf-8")
+            (root / "artifacts" / "scratch" / "probe.py").write_text("print('ok')\n", encoding="utf-8")
+            (root / ".agents" / "rules" / "coding-and-safety.md").write_text(
+                "Broken [link](./does-not-exist.md)\n", encoding="utf-8"
+            )
+            errors = verify_workflow.audit_workspace(root)
+            self.assertTrue(any("coding-and-safety.md" in e and "broken relative link" in e for e in errors))
+            self.assertFalse(any("scratch" in e for e in errors))
 
 
 if __name__ == "__main__":

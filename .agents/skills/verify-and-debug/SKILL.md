@@ -23,7 +23,7 @@ When tests fail or bugs occur, do **not** guess-patch:
 ## 3. Read-Only Static Diff Audit (`/audit`)
 1. Inspect `git diff -U1` (or `python .agents/scripts/workflow_ops.py diff` in non-Git repos) against approved scope.
 2. Trace `Caller -> Changed Code -> Consumer/Side Effects` to verify 100% caller/test/config updates and no unwired parameters.
-3. Check Never Cut List (`{{NEVER_CUT_LIST}}`), Zero-Mock, crash-hiding `try-except`, `BOM=False`, no hardcoded drive letters, no truncation ellipses, and clean `.agents/ck/last_alert.log`.
+3. Check Never Cut List (`{{NEVER_CUT_LIST}}`), Zero-Mock, Zero In-Code Comments (notes in `artifacts/comments/`, allowing only high-importance exceptions/directives), crash-hiding `try-except`, `BOM=False`, no hardcoded drive letters, no truncation ellipses, and clean `.agents/ck/last_alert.log`.
 4. Issue `Static Audit: PASS / FAIL / PARTIAL / NOT AUDITED` with severity-ranked findings (`Critical`, `Major`, `Minor`) back to `@lead`.
 
 ## 4. Compound Learning (`/compound`)

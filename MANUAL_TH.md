@@ -19,7 +19,7 @@
 | ชั้นระบบ | ไฟล์ / โฟลเดอร์ | หน้าที่และการทำงานจริง |
 |---|---|---|
 | **1. กฎหลักระดับรูท** | [AGENTS.md](./AGENTS.md) | คู่มือหลักที่ระบบโหลดเสมอ ($\le 24\text{ KB}$): นโยบายภาษา, คำสั่งหลัก, ข้อห้ามเด็ดขาด, ตารางบทบาทและโมเดล 4 ตำแหน่ง, และแนวทางปฏิบัติ `0–12` |
-| **2. กฎปฏิบัติการเสริม** | [.agents/rules/rules.md](./.agents/rules/rules.md) | กฎเฉพาะที่ไม่ซ้ำซ้อน: โมดูลความเสี่ยงสูง (Blast Radius), กฎกันงานค้างหายบน `swarm`, เงื่อนไข `/approve` + `Post-Approval Auto-Fix`, และวิธี Rollback |
+| **2. กฎปฏิบัติการแยกตามประเภทงาน (`4` ไฟล์)** | [.agents/rules/rules.md](./.agents/rules/rules.md) | สารบัญนำทางตามงานเพื่อให้เอเจนต์อ่านเฉพาะไฟล์ที่เกี่ยวข้อง (`coding-and-safety.md`, `commands-and-tools.md`, `agents-and-handoff.md`) |
 | **3. เอเจนต์เฉพาะทาง (`4` บทบาท)** | `.agents/agents/*.md` | นิยามเอเจนต์ครบ 10 องค์ประกอบ (`@lead`, `@builder`, `@verifier`, `@researcher`) แยกหน้าที่ชัดเจนระหว่างวางแผน, ลงมือแก้, ตรวจ/เทสต์แบบอ่านอย่างเดียว, และค้นคว้าข้อมูล |
 | **4. ทักษะโหลดตามความจำเป็น (`4` สกิล)** | `.agents/skills/*/SKILL.md` | คู่มือขั้นตอนเฉพาะทางแบบ Progressive Disclosure ($\le 300$ บรรทัดต่อไฟล์) โหลดเฉพาะตอนเรียกใช้เพื่อไม่ให้กินหน่วยความจำแชตโดยเปล่าประโยชน์ |
 | **5. Lifecycle Hooks และ Python CLI** | [.agents/hooks.json](./.agents/hooks.json), `.agents/scripts/*.py` | สคริปต์ Python 3.10+ มาตรฐาน (ไม่ต้องติดตั้งไลบรารีเพิ่ม) ทำงานตรงตามจังหวะ Lifecycle: ฟื้นฟูบริบทตอนเปิดแชต, บล็อกการแก้ไฟล์หากยังไม่ Backup, บล็อกคำสั่งต้องห้าม, ตรวจสุขอนามัยหลังแก้, สร้าง Diff และชุดทดสอบในตัว |
@@ -30,7 +30,7 @@
 | กลไก | ระดับการบังคับ | พฤติกรรมที่เกิดขึ้นจริง |
 |---|---|---|
 | เพดาน `AGENTS.md` `24,000` bytes และการค้นหาแบบ Hierarchical | **Antigravity Runtime (บังคับจริง)** | ระบบตัดทอนเนื้อหาหากเกิน 24 KB และค้นหาเดินขึ้นจากไฟล์ที่เปิดอยู่ไปยัง Root ของ Workspace |
-| `SessionStart` ฟื้นฟู Checkpoint (`hooks.json`) | **Hook Script (บังคับจริง)** | รัน `scripts/workflow_hooks.py session-start` ด้วย CWD = `.agents/` เพื่อแทรกสรุปงานล่าสุดจาก `.agents/ck/context.json` โดยอัตโนมัติ |
+| `SessionStart` เลือกภาษาครั้งแรก, ฟื้นฟู Checkpoint และเตือน Bug ค้าง (`hooks.json`) | **Hook Script (บังคับจริง)** | รัน `scripts/workflow_hooks.py session-start` ด้วย CWD = `.agents/` เพื่อตรวจจับ `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` ที่ยังไม่ตั้งค่า, แทรกสรุป Checkpoint/Handoff ล่าสุด, และแจ้งเตือน Bug ค้างอายุ `3–7` วันใน `artifacts/bug-reports/README.md` |
 | `PreToolUse` ดัก Backup และคำสั่งต้องห้าม | **Hook Script (บังคับจริง)** | คืนค่า `decision: "deny"` บล็อก `edit_file`/`write_file` ทันทีหากยังไม่มี Backup Manifest ของวันนั้น หรือบล็อก `run_command` ที่ตรงกับ Regex ต้องห้าม |
 | `PostToolUse` ตรวจสุขอนามัยหลังแก้ (`last_alert.log`) | **Hook Script (บังคับจริง)** | รัน `verify_workflow.audit_workspace()` หลังแก้ไฟล์เวิร์กโฟลว์ แล้วเขียนหรือล้าง `.agents/ck/last_alert.log` อัตโนมัติ |
 | `Stop` ด่านกันปิดงานเมื่อมี Alert (`alert-stop-gate`) | **Hook Script (บังคับจริงเมื่อเปิดใช้)** | ปิดไว้เป็นค่าเริ่มต้น (`"enabled": false`) เพื่อความไม่จุกจิก เมื่อเปิดใช้จะเช็ก `continuationActive` กันลูปไม่รู้จบ |
@@ -42,8 +42,8 @@
 
 ## 2. ความสามารถทั้งหมดของระบบ (Capabilities)
 
-1. **แยกภาษาเพื่อประหยัด Token (Language Split):** ไฟล์ระบบ (`AGENTS.md`, `.agents/`) และกระบวนการคิดภายในใช้ภาษาอังกฤษเพื่อประหยัด Token ส่วนภาษาในการสนทนาและบันทึกใน `artifacts/` ปรับเป็นภาษาที่ทีมต้องการได้ผ่าน Placeholder `{{CHAT_AND_ARTIFACTS_LANGUAGE}}`
-2. **คุยกระชับเป็นค่าเริ่มต้น และขยายละเอียดเฉพาะตอนจำเป็น (`no-code / no-detail`):** การถามตอบและเช็กสถานะทั่วไปตอบเฉพาะหลักการ เงื่อนไขตัดสินใจ และพฤติกรรม `3–5` ข้อ (งดโค้ดและรายชื่อไฟล์ที่ไม่ได้แก้) และจะขยายรายละเอียดครบถ้วนอัตโนมัติเฉพาะตอน **วางแผนก่อน `/approve`**, **ลงมือเขียน/แก้โค้ด** (สรุป 3 ส่วน + ลิงก์ไฟล์จริง + `.diff`), หรือเมื่อสั่ง `/more-detail`
+1. **เลือกภาษาอัตโนมัติสำหรับผู้ใช้ครั้งแรก + แยกภาษาเพื่อประหยัด Token:** เมื่อเปิดใช้งานครั้งแรกขณะที่ `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` ยังไม่ถูกตั้งค่า ฮุค `SessionStart` จะสั่งให้ `@lead` แสดงเมนูคลิกเลือกภาษา (`ask_question`) แล้วบันทึกด้วย `workflow_ops.py set-language --lang "<Language>"` (พร้อมสำรองไฟล์อัตโนมัติ) โดยไฟล์ระบบและกระบวนการคิดภายในคงเป็นอังกฤษ ส่วนการสนทนาและ `artifacts/` ใช้ภาษาที่เลือกด้วยถ้อยคำเรียบง่ายที่คนไม่เขียนโค้ดก็เข้าใจได้
+2. **คุยกระชับเป็นค่าเริ่มต้น, ขยายละเอียดเฉพาะตอนจำเป็น และฟันธงคำแนะนำ:** การถามตอบทั่วไปตอบเฉพาะหลักการและพฤติกรรม `3–5` ข้อ และจะขยายละเอียดอัตโนมัติตอน **วางแผนก่อน `/approve`** (พร้อมเมนูคลิก `ask_question`, ข้อเสนอทางเลือกที่ดีกว่า และ Acceptance Criteria), **ลงมือแก้โค้ด** (สรุป 3 ส่วน + ลิงก์ไฟล์จริง + `.diff`), หรือเมื่อสั่ง `/more-detail` โดยงานวิเคราะห์/ทดสอบก่อนตัดสินใจจะปิดท้ายด้วย **Action Recommendation Verdict** (ควรทำหรือไม่พร้อมเหตุผล)
 3. **โหลดเฉพาะสิ่งที่จำเป็น, `/compact` และ `/handoff` ย้ายหน้าต่างแชตใหม่:** โหลดสกิลเฉพาะตอนใช้งาน, อ่านไฟล์ใหญ่แบบเจาะช่วง ($\le 300$ บรรทัด), เมื่อครบ `10–12` เทิร์น (`~35` calls) หรือพบ `<CONTEXT_SUMMARY>` ระบบจะเสนอ **`/compact`** (ทำต่อหน้าต่างเดิม) คู่กับ **`/handoff`** (สร้าง `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + Starter Prompt พร้อมให้ `SessionStart` ในหน้าต่างใหม่รับช่วงต่ออัตโนมัติ) พร้อมฟื้นความจำแบบ $O(1)$ (~250 tokens) จาก `Conversations/README.md` + `.agents/ck/context.json`
 4. **จัดขนาดงานอัตโนมัติ 3 ระดับ + โควตา Pool + Auto Effort:**
    - **Tier 0 In-line:** แก้ 1–2 บรรทัด หรือถามตอบสั้น ($\le 3$ reads) จบในแชตเดียว
@@ -54,7 +54,7 @@
 6. **ฮุคควบคุมวงจรการทำงานครบ 6 อีเวนต์ (CWD = `.agents/`):** เชื่อมต่อพร้อมใช้ 4 อีเวนต์หลักใน [.agents/hooks.json](./.agents/hooks.json) (`SessionStart`, `PreToolUse` สำหรับทั้งแก้ไฟล์และรันคำสั่ง, `PostToolUse`, และ `Stop` แบบเปิดเลือกได้) และรองรับการต่อยอด `PreInvocation` / `PostInvocation`
 7. **สคริปต์กระจายงานแบบขนานด้วย Python (`run_workflow`):** มีต้นแบบ [.agents/workflows/project_fanout.py](./.agents/workflows/project_fanout.py) + [.agents/workflows/workflow.json](./.agents/workflows/workflow.json) ใช้ `phase`, `agent`, `parallel`, `log`, JSON `schema` และตรวจ `Args` ขาเข้า
 8. **สำรองข้อมูลและสร้าง Diff แม้ไม่มี Git:** `workflow_ops.py backup` บันทึกไฟล์เดิมพร้อม `SHA-256` และบันทึกไฟล์ใหม่เป็น `"status": "absent"` เพื่อ Rollback ได้แม่นยำ; `workflow_ops.py diff` สร้างไฟล์ `.diff` (`-U1`) เทียบกับ Backup Manifest ได้แม้ไม่มี `.git`
-9. **กลไกกันพลาดและเรียนรู้ถาวร:** ขออนุมัติครบ 4 ขั้นก่อนแก้, แยก `@verifier` แบบอ่านอย่างเดียวไม่ให้แอบแก้ไฟล์เอง, ค้านด้วยหลักฐาน 3 ส่วน (`Evidence-Based Objection`), ล็อกข้อยุติไม่ถามซ้ำ (`session-settled:`), ท้าทายสมมติฐานเมื่อพลาด 2 รอบ (`Attack the Premise`), ตัดวงจรเมื่อพลาดติดกัน 3 รอบ (`Circuit Breaker` $N \ge 3$), และแปลงบทเรียนเป็นเทสต์/กฎถาวร (`Compound Learning`: `Test/Lint -> Rule -> Solution Doc`)
+9. **กลไกกันพลาด สุขอนามัยโค้ด และเรียนรู้ถาวร:** ขออนุมัติครบ 4 ขั้นพร้อมเมนูคลิก `ask_question`, กฎป้องกันความผิดพลาดซ้ำของเอเจนต์ (Self-Mistake Governance), กฎ Zero In-Code Comments (ย้ายโน้ตไป `artifacts/comments/`), แยก `artifacts/tools/` กับ `artifacts/scratch/`, แจ้งเตือน Bug ค้าง `3–7` วัน, แยก `@verifier` แบบอ่านอย่างเดียว, ค้านด้วยหลักฐาน 3 ส่วน (`Evidence-Based Objection`), ล็อกข้อยุติ (`session-settled:`), ท้าทายสมมติฐาน ($N=2$), ตัดวงจร ($N \ge 3$), และ `Compound Learning` (`Test/Lint -> Rule -> Solution Doc`)
 10. **เทมเพลตเสริม MCP และงานตั้งเวลาอัตโนมัติ (Opt-In):** เตรียม [.agents/templates/mcp_config.example.json](./.agents/templates/mcp_config.example.json) (รองรับทั้ง Stdio และ Streamable HTTP `/mcp`, ไม่รองรับ legacy SSE) และ [.agents/templates/sidecar.schedule.example.json](./.agents/templates/sidecar.schedule.example.json) (`"builtin": "schedule"`, `CRON_TZ`, `restart_policy: "always"`)
 
 ---
@@ -113,6 +113,7 @@
 
 | คำสั่ง | หน้าที่การใช้งาน |
 |---|---|
+| `python .agents/scripts/workflow_ops.py set-language --lang "<Language>"` | ตั้งค่าภาษา `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` ครบทุกไฟล์เวิร์กโฟลว์ (พร้อม Pre-Action Backup อัตโนมัติ) และบันทึก `chat_language` ลง `context.json` |
 | `python .agents/scripts/workflow_ops.py check-placeholders` | สแกนและแสดงรายการ `{{PLACEHOLDER}}` ที่ยังไม่ได้เติมทั้งหมดพร้อมไฟล์และเลขบรรทัด |
 | `python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found` | สแกนช่องว่างพร้อมคืน `Exit 1` หากยังมีจุดที่กรอกไม่ครบ (ใช้เป็น Readiness Gate) |
 | `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | สำรองไฟล์ก่อนแก้ไขลง `backup/` พร้อม `SHA-256` และสถานะไฟล์ใหม่ (`absent`) |
@@ -138,7 +139,7 @@
 
 ## 4. ตัวอย่างลำดับการทำงานจริงตั้งแต่ต้นจนจบ
 
-1. **เปิดแชตใหม่:** ฮุค `SessionStart` แทรกสรุปงานล่าสุดจาก `.agents/ck/context.json` และ `@lead` อ่าน 3 บรรทัดบนของ `artifacts/Conversations/README.md` ($O(1)$ Rehydration)
+1. **เปิดแชตใหม่ (เลือกภาษาครั้งแรก & ฟื้นฟูบริบท):** หากเปิดใช้ครั้งแรกก่อนตั้งค่า `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` ฮุค `SessionStart` จะให้ `@lead` เปิดเมนูคลิกเลือกภาษา (`ask_question`) และบันทึกด้วย `workflow_ops.py set-language` จากนั้นในรอบถัดไป `SessionStart` จะแทรกสรุปงานล่าสุด/Handoff พร้อมเตือน Bug ค้าง `3–7` วัน และ `@lead` อ่าน 3 บรรทัดบนของ `artifacts/Conversations/README.md` ($O(1)$ Rehydration)
 2. **สั่งงาน:** ผู้ใช้พิมพ์ `/vibe <งาน>` (หรือถามคำถามทั่วไปซึ่ง `@lead` จะตอบสั้น `3–5` ข้อในโหมด `no-code / no-detail`)
 3. **วางแผนและขออนุมัติ:** `@lead` (ร่วมกับ `@researcher` หากต้องสำรวจหลายไฟล์) ตรวจโค้ดจริง, เช็ก Conflict/Redundancy, ร่างพิมพ์เขียว (`U1, U2...`), เทียบ Pros/Cons เฉพาะทางเลือกที่ต่างกัน แล้วรอ `/approve`
 4. **สำรองและลงมือทำ:** หลังได้ `/approve` ฝ่าย `@builder` รัน `workflow_ops.py backup` แล้วแก้ไฟล์แบบ Minimal Diff `-U1` (ฮุค `PreToolUse` บังคับเช็ก Backup และฮุค `PostToolUse` ตรวจสุขอนามัยให้อัตโนมัติ) จากนั้นขัดเกลาด้วย `/simplify`
@@ -214,11 +215,12 @@
 
 1. **คัดลอกไฟล์ไปวางที่ Root ของโปรเจกต์ใหม่:** คัดลอก `AGENTS.md`, `MANUAL_TH.md` (และ/หรือ `MANUAL_EN.md`), `.agents/`, และ `artifacts/` ไปวางที่ Root ของโปรเจกต์เป้าหมาย *(ห้ามวางซ้อนใต้ Workspace อื่นที่มี `AGENTS.md` อยู่แล้ว เพราะ Antigravity จะโหลดกฎเดินขึ้นสู่ Root ซ้อนกัน)* พร้อมเพิ่ม `backup/` และ `.agents/ck/last_alert.log` ลง `.gitignore`
 2. **ตรวจคำสั่ง Python บนเครื่อง:** รัน `python --version` (ต้อง `3.10+`) หากใช้ Linux/macOS ที่มีเฉพาะ `python3` ให้แก้ `python` ใน [.agents/hooks.json](./.agents/hooks.json) เป็น `python3` โดย **คง** `scripts/workflow_hooks.py` ไว้เทียบกับ CWD `.agents/` เสมอ
-3. **สแกนและเติม Placeholders ให้ครบ:**
+3. **เลือกภาษาและเติม Placeholders ที่เหลือให้ครบ:**
    ```bash
+   python .agents/scripts/workflow_ops.py set-language --lang "Thai"   # หรือคลิกเลือกจากเมนูตอนเปิดแชตครั้งแรก
    python .agents/scripts/workflow_ops.py check-placeholders
    ```
-   เติมข้อมูลลง [AGENTS.md](./AGENTS.md), [.agents/rules/rules.md](./.agents/rules/rules.md), [.agents/skills/project-tasks/SKILL.md](./.agents/skills/project-tasks/SKILL.md), เอเจนต์/สกิลที่อ้างคำสั่ง, [.agents/scripts/workflow_hooks.py](./.agents/scripts/workflow_hooks.py), [.agents/ck/context.json](./.agents/ck/context.json), และ [artifacts/README.md](./artifacts/README.md) ส่วนไฟล์ใน `.agents/templates/` ให้คัดลอกไปตั้งค่าเมื่อใช้งานจริง (หรือลบทิ้งหากยังไม่ใช้เพื่อให้ `check-placeholders --fail-on-found` คืน `Exit 0`)
+   เติมข้อมูลลง [AGENTS.md](./AGENTS.md), `.agents/rules/*.md`, [.agents/skills/project-tasks/SKILL.md](./.agents/skills/project-tasks/SKILL.md), เอเจนต์/สกิลที่อ้างคำสั่ง, [.agents/scripts/workflow_hooks.py](./.agents/scripts/workflow_hooks.py), [.agents/ck/context.json](./.agents/ck/context.json), และ [artifacts/README.md](./artifacts/README.md) ส่วนไฟล์ใน `.agents/templates/` ให้คัดลอกไปตั้งค่าเมื่อใช้งานจริง (หรือลบทิ้งหากยังไม่ใช้เพื่อให้ `check-placeholders --fail-on-found` คืน `Exit 0`)
 4. **รันตัวตรวจและชุดทดสอบก่อนเริ่มใช้งานจริง (ต้องได้ `Exit 0` ครบ):**
    ```bash
    python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found
