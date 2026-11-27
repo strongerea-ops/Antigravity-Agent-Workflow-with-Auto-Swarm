@@ -7,7 +7,7 @@
 | Task Nature | Rule File | When to Read |
 |---|---|---|
 | **Code Edits, Blast Radius & Safety** | [coding-and-safety.md](./coding-and-safety.md) | Modifying protected source paths, high-blast-radius modules, shared contracts, or running backups/rollbacks |
-| **Commands, Hooks & Tooling Hygiene** | [commands-and-tools.md](./commands-and-tools.md) | Configuring hooks (`CWD = .agents/`), running workflow CLI commands, or creating/promoting scripts in `artifacts/tools/` & `artifacts/scratch/` |
+| **Commands, Hooks & Tooling Hygiene** | [commands-and-tools.md](./commands-and-tools.md) | Configuring hooks (`CWD = .agents/`), running `rollback`/`prune`/`inspect` CLI commands, managing `artifacts/` reference retention, or promoting reusable tools into `artifacts/tools/` |
 | **Agents, `/approve`, `/handoff` & Onboarding** | [agents-and-handoff.md](./agents-and-handoff.md) | First-time user language selection, interactive `ask_question` `/approve` menus, `/handoff`, 10-element agent schema, `Post-Approval Auto-Fix`, or `3–7` day bug reminders |
 
 ---

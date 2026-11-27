@@ -1,17 +1,18 @@
 ---
 name: workflow-ops
-description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), context quota management (/compact), new-window session handoff (/handoff), turn logging, placeholder scanning, and workflow self-auditing."
+description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), new-window session handoff (/handoff), rollback/prune/inspect CLI operations, turn logging, placeholder scanning, and workflow self-auditing."
 ---
 
 # Skill: workflow-ops
 
-> **Purpose:** Keep session state durable, context lean, and workflow files verified using pure-Python stdlib automation in `.agents/scripts/`.
+> **Purpose:** Keep session state durable, context lean, backups bounded (`<= 30` days), and workflow files verified using pure-Python stdlib automation in `.agents/scripts/`.
 
-## 1. Tri-Tier Context Quota, `/compact` & `/handoff` (`/compact`, `/handoff`, `/ck`)
+## 1. Tri-Tier Context Quota & New-Window Handoff (`/handoff`, `/ck`)
+*(Note: `/compact` is a native Antigravity UI slash command — NOT a skill prompt trigger. Always instruct users to type `/compact` in chat and press `Enter`, then run $O(1)$ rehydration afterward.)*
 1. **Tier 1 — Output Pruning:** Strip noisy raw logs and boilerplate; report unified diffs (`-U1`) and exact pass/fail summaries.
-2. **Tier 2 — Proactive `/compact` or `/handoff` Clickable Menu (`ask_question`):** When `<CONTEXT_SUMMARY>` appears or a conversation reaches `10–12` turns (`~35` tool calls), confirm checkpoint $t_0$ is saved and present a clickable `ask_question` menu offering:
+2. **Tier 2 — Proactive `/handoff` vs. Native `/compact` Clickable Menu (`ask_question`):** When `<CONTEXT_SUMMARY>` appears or a conversation reaches `10–12` turns (`~35` tool calls), confirm checkpoint $t_0$ is saved and present a clickable `ask_question` menu offering:
    - **`/handoff` (Recommended)** — run `workflow_ops.py handoff` immediately on click to move cleanly to a **brand-new chat window** with zero stale context,
-   - **`/compact`** — stay in the **same chat window** with compacted history (remind the user to type `/compact` in chat, as native UI slash commands cannot be executed programmatically), OR
+   - **Native `/compact`** — stay in the **same chat window** with compacted history (tell the user plainly to type `/compact` in the chat input and press the `Enter` key, as native UI slash commands cannot be executed programmatically), OR
    - **Continue as-is** for now.
    *(Similarly, whenever proactively introducing other relevant workflow or native slash commands, offer clickable `ask_question` choices with plain-language explanations.)*
 3. **Tier 3 — New-Window `/handoff` & $O(1)$ Rehydration:**
@@ -29,9 +30,10 @@ description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), context qu
   - *Corrupt/Unsupported:* Never silently overwrite; report truthfully and rebuild context from source/artifacts.
   - *Strict Approval Boundary:* Checkpoint `status` NEVER substitutes for a fresh `/approve`.
 
-## 3. Archival, Tooling Hygiene & 7-Test No-Slop Logging
+## 3. Archival, Artifact Retention, Tooling Hygiene & 7-Test No-Slop Logging
 - Primary Intake (`@lead`) owns daily conversation logging via `python .agents/scripts/workflow_ops.py log-turn --title "..." --summary "..."`.
-- Write `artifacts/` entries in `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` using relative paths only (`BOM=False`) and update `README.md` for every populated category (excluding disposable `artifacts/scratch/`). Record code notes in `artifacts/comments/YYYY-MM-DD/YYYYMMDD_comment_<topic>.md`, reusable local helpers in `artifacts/tools/` (indexed in `artifacts/tools/README.md`), and disposable one-off scripts in `artifacts/scratch/`.
+- **Never Auto-Delete `artifacts/`:** Documents under `artifacts/` are user-managed reference materials (enforced at runtime by `PreToolUse` hook). If an artifact conflicts with current rules or operations, alert the user with concrete recommendations rather than deleting it.
+- Write `artifacts/` entries in `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` using relative paths only (`BOM=False`) and update `README.md` for every populated category. Record code notes in `artifacts/comments/YYYY-MM-DD/YYYYMMDD_comment_<topic>.md`, reusable local helpers in `artifacts/tools/` (indexed in `artifacts/tools/README.md`), and temporary one-off scripts in Antigravity's built-in per-session `scratch/` folder (never workspace `artifacts/scratch/`).
 - Apply **7-Test No-Slop**: state concrete *Mechanism*, avoid generic *Portability*, name the *Actor*, keep *One Idea* per bullet, maximize *Density*, put the *Decision-First*, and make next actions *Reader-Actionable*.
 
 ## 4. Essential CLI Operations
@@ -42,11 +44,20 @@ python .agents/scripts/workflow_ops.py set-language --lang "<Language>"
 # Scan remaining {{PLACEHOLDERS}} across the workflow
 python .agents/scripts/workflow_ops.py check-placeholders
 
-# Pre-Action Backup with SHA-256 manifest
+# Pre-Action Backup with SHA-256 manifest (auto-prunes backups older than 30 days)
 python .agents/scripts/workflow_ops.py backup --topic "<topic>" <files...>
 
 # Generate -U1 diff against latest backup (works even without .git)
 python .agents/scripts/workflow_ops.py diff --output "artifacts/diffs/YYYY-MM-DD/<topic>.diff"
+
+# Preview or apply SHA-256 verified rollback from a backup manifest
+python .agents/scripts/workflow_ops.py rollback --backup "<backup_dir>" [--apply]
+
+# Preview or prune expired backups older than 30 days (backup/ only — never touches artifacts/)
+python .agents/scripts/workflow_ops.py prune --keep-days 30 [--apply]
+
+# Run unified workflow health gates (+ optional reusable --tool scripts)
+python .agents/scripts/workflow_ops.py inspect --mode quick
 
 # Generate a new-window handoff packet (.agents/ck/HANDOFF.md + artifacts/handoffs/)
 python .agents/scripts/workflow_ops.py handoff --objective "<next objective>" --next "<step 1>"

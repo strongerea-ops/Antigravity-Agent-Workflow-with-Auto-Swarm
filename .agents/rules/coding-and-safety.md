@@ -15,7 +15,9 @@
 - **Shared Contract Rule:** Before renaming or changing any shared function, API schema, CLI flag, skill, or agent name, grep 100% of references across source, tests, configs, `AGENTS.md`, `.agents/`, and `hooks.json`.
 - **Environment & VCS Hygiene:** Never commit `node_modules/`, `dist/`, `build/`, `__pycache__/`, `.pytest_cache/`, `.venv/`, secrets (`.env`), or `.log` files. `file:///` links are permitted only in IDE chat responses, never in committed files. On Windows terminals handling UTF-8 / non-ASCII logs, set `PYTHONIOENCODING=utf-8` (or `chcp 65001`).
 
-## 3. Pre-Action Backup & Rollback Semantics
+## 3. Pre-Action Backup, Automated Rollback & 30-Day Retention Semantics
 - Run `python .agents/scripts/workflow_ops.py backup --topic "<topic>" <files...>` before editing protected files (avoiding raw interactive shell copy commands that risk stalling).
-- *Existing files:* Copied with `SHA-256` into `backup/YYYYMMDDTHHMMSSffffffZ_<topic>/manifest.json` (`"status": "backed_up"`, RFC 3339 UTC microsecond timestamp). On rollback, copy the backup file back over the target.
-- *Newly created files:* Recorded as `"status": "absent"`. On rollback, delete the newly created file cleanly.
+- **Max 30-Day Backup Retention:** `backup/` is capped at `30` days (`BACKUP_MAX_RETENTION_DAYS = 30`). `workflow_ops.py backup` automatically deletes expired `backup/` entries older than `30` days; manual preview/cleanup is available via `python .agents/scripts/workflow_ops.py prune --keep-days 30 [--apply]`. **Never auto-delete any file under `artifacts/`** (guarded at runtime by `PreToolUse` hook; if an artifact conflicts with current rules/operations, notify the user with recommendations).
+- **Automated Rollback (`SHA-256` Verified):** Preview with `python .agents/scripts/workflow_ops.py rollback --backup "<backup_dir>"` (dry-run default) and apply with `--apply`.
+  - *Existing files (`"status": "backed_up"`):* Verifies `SHA-256` checksum and copies the backup file back over the target.
+  - *Newly created files (`"status": "absent"`):* Cleanly deletes the newly created file.

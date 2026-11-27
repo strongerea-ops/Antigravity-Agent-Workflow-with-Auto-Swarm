@@ -35,6 +35,9 @@ python .agents/scripts/workflow_ops.py set-language --lang "<Language>"
 python .agents/scripts/workflow_ops.py check-placeholders
 python .agents/scripts/workflow_ops.py backup --topic "<topic>" <files...>
 python .agents/scripts/workflow_ops.py diff --output "artifacts/diffs/YYYY-MM-DD/<topic>.diff"
+python .agents/scripts/workflow_ops.py rollback --backup "<backup_dir>" [--apply]
+python .agents/scripts/workflow_ops.py prune --keep-days 30 [--apply]
+python .agents/scripts/workflow_ops.py inspect --mode quick
 python .agents/scripts/workflow_ops.py log-turn --title "<title>" --summary "<summary>"
 python .agents/scripts/workflow_ops.py handoff --objective "<next objective>"
 python .agents/scripts/verify_workflow.py
@@ -51,8 +54,8 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 - `AGENTS.md` — Root rule index and operational contract | `MANUAL_EN.md` — Complete English manual | `MANUAL_TH.md` — Complete Thai manual
 - `{{SRC_DIR}}` — Application source code | `{{TEST_DIR}}` — Automated test suite
 - `.agents/` — `agents/` (`4` Agents), `skills/` (`4` Skills), `rules/` (`4` Task-Based Rule Files), `hooks.json`, `scripts/` (`workflow_hooks.py`, `workflow_ops.py`, `verify_workflow.py`, `test_workflow_ops_and_hooks.py`), `workflows/` (`workflow.json`, `project_fanout.py`), `templates/` (MCP & Scheduled Automation examples), `ck/` (`context.json`, `CONTEXT.md`, `HANDOFF.md`, `history/`)
-- `artifacts/` — `Conversations/`, `user-requirements/`, `blueprints/`, `project-memory/`, `diffs/`, `reviews/` (plus event-driven `handoffs/`, `comments/`, `bug-reports/`, `solutions/`, `Lessons/`, `agent-confession/`, reusable `tools/`, and disposable `scratch/`)
-- `backup/` — `backup/YYYYMMDDTHHMMSSffffffZ_<topic>/` + `manifest.json` (SHA-256, RFC 3339 UTC)
+- `artifacts/` — User-managed reference materials (**never auto-deleted**): `Conversations/`, `user-requirements/`, `blueprints/`, `project-memory/`, `diffs/`, `reviews/` (plus event-driven `handoffs/`, `comments/`, `bug-reports/`, `solutions/`, `Lessons/`, `agent-confession/`, and reusable `tools/`; store temporary one-off scripts in Antigravity's built-in per-session `scratch/` folder, never workspace `artifacts/scratch/`)
+- `backup/` — `backup/YYYYMMDDTHHMMSSffffffZ_<topic>/` + `manifest.json` (SHA-256, RFC 3339 UTC; **max `30` days retention** — older backups auto-deleted on `backup`/`prune`)
 
 ## 5. Read-Before-Touch & Lifecycle
 0. **$O(1)$ Autonomous Rehydration & Startup Checks:** On a new session or after `/compact`, read the top `3` lines of [artifacts/Conversations/README.md](./artifacts/Conversations/README.md) + [.agents/ck/context.json](./.agents/ck/context.json) ($t_0$, plus `.agents/ck/HANDOFF.md` when `status == "HANDOFF_READY"`) (~250 tokens). Act on `SessionStart` hook prompts for first-time language selection (`{{CHAT_AND_ARTIFACTS_LANGUAGE}}`) and unresolved `3–7` day bug reminders (`artifacts/bug-reports/README.md`).
@@ -60,7 +63,7 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 
 ## 6. Hard Constraints (Don'ts)
 1. Never commit hardcoded drive letters (e.g., `C:\`, `D:\`) or absolute local paths, and enforce UTF-8 without BOM (`BOM=False`); use relative paths only (except `file:///` links in chat).
-2. Never create a new Git branch unless explicitly instructed.
+2. Never create a new Git branch or run destructive `git reset --hard` / `git clean -f` / `git checkout -- .` unless explicitly instructed (enforced by `hooks.json`).
 3. Never edit protected source code (`{{PROTECTED_PATHS}}`), `AGENTS.md`, or `.agents/` before running Pre-Action Backup (`workflow_ops.py backup`) into `backup/YYYYMMDDTHHMMSSffffffZ_<topic>/` + `manifest.json`.
 4. Never violate project-specific domain constraints: `{{DOMAIN_CONSTRAINTS}}`.
 5. Never weaken or delete items on the Never Cut List: `{{NEVER_CUT_LIST}}` (Trust-Boundary Validation, Data-Integrity Error Handling, Security Controls, Automated Tests).
@@ -97,12 +100,12 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 1. **Zero-Mock & Truthful:** Never mock owned code; confess real limits in `artifacts/agent-confession/`.
 2. **Explain-First, Proactive Proposals & Self-Mistake Governance:** On bottlenecks, bad commands, or conflict/redundancy, stop and object in `3` parts: **(1) conflicting/redundant evidence, (2) impact/risk, (3) valid alternatives**, while respecting `session-settled:` decisions. Whenever a better approach exists, proactively propose it (merit + feasibility) before `/approve`; on any agent mistake, propose a preventive/rectification rule in `AGENTS.md` or `.agents/` and obtain `/approve` first.
 3. **Read-Only Audit Separation:** `@verifier` and `@researcher` never edit project files; `@verifier` reports defects back to `@lead` (never dispatches `@builder` directly).
-4. **Boundaries, Tool Hygiene, `/approve` & Backup:** Automatic writes are allowed only in `artifacts/` and `.agents/ck/` (plus `Post-Approval Auto-Fix` within approved scope); code/workflow edits require Constraints `6.3` & `6.8` (see [.agents/rules/commands-and-tools.md](./.agents/rules/commands-and-tools.md) for `artifacts/tools/` & `artifacts/scratch/` hygiene).
+4. **Boundaries, Retention (`backup/` 30d vs. `artifacts/` Reference), Tool Hygiene & `/approve`:** Automatic writes are allowed only in `artifacts/` and `.agents/ck/` (plus `Post-Approval Auto-Fix` within approved scope); code/workflow edits require Constraints `6.3` & `6.8`. `backup/` is capped at **max `30` days** (auto-pruned on `backup`/`prune`). Documents under `artifacts/` are **user-managed reference materials and must NEVER be automatically deleted** (enforced by `PreToolUse` hook) — if an artifact conflicts with current operations/rules, alert the user with concrete resolution recommendations instead of deleting it. Use Antigravity's built-in session `scratch/` folder for one-off scripts instead of workspace `artifacts/scratch/` (see [.agents/rules/commands-and-tools.md](./.agents/rules/commands-and-tools.md)).
 5. **4-Pillar Sync:** Update `user-requirements/`, `project-memory/` (ADR), `Conversations/`, and `backup/` in the same turn for architectural or feature changes.
 6. **Mandatory Blueprint:** New features, modules, or workflow changes require a blueprint with stable `U-IDs` (`U1, U2...`) in `artifacts/blueprints/`.
 7. **Proposal Bundling:** Merge compatible proposals into one cohesive plan; show Pros/Cons only for divergent paths.
 8. **Relative Paths & Clean UTF-8:** Enforce `BOM=False`, relative paths only in committed files, and clean syntax via `verify_workflow.py`.
-9. **Context Quota, `/compact`, `/handoff` & Clickable Command Menus:** Read `<= 300` lines; prune noisy logs; upon `<CONTEXT_SUMMARY>` or `10–12` turns (`~35` tool calls), proactively present a clickable `ask_question` menu offering **`/handoff`** (create `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + starter prompt for a fresh window picked up by `SessionStart`), **`/compact`** (compact and stay in this window — user types `/compact`), or continuing as-is. Whenever introducing or suggesting other helpful commands, offer clickable `ask_question` options so the user can pick without typing (see [.agents/rules/agents-and-handoff.md](./.agents/rules/agents-and-handoff.md)); restore in $O(1)$ from `.agents/ck/context.json` (checkpoint/handoff status NEVER equals `/approve`).
+9. **Context Quota, `/compact`, `/handoff` & Clickable Command Menus:** Read `<= 300` lines; prune noisy logs; upon `<CONTEXT_SUMMARY>` or `10–12` turns (`~35` tool calls), proactively present a clickable `ask_question` menu offering **`/handoff`** (create `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + starter prompt for a fresh window picked up by `SessionStart`), **`/compact`** (compact and stay in this window — user types `/compact` and presses `Enter`), or continuing as-is. Whenever introducing or suggesting other helpful commands, offer clickable `ask_question` options so the user can pick without typing (see [.agents/rules/agents-and-handoff.md](./.agents/rules/agents-and-handoff.md)); restore in $O(1)$ from `.agents/ck/context.json` (checkpoint/handoff status NEVER equals `/approve`).
 10. **Premise Check & Circuit Breaker ($N \ge 3$):** After `2` failures on the same premise, **Attack the Premise**; after `3` consecutive failures on the same root cause, halt immediately into Explain-First mode.
 11. **Senior Dev & Compound Learning:** Minimal Diff `-U1`, 100% Callers, Never Cut List, and evaluate `/compound` (`Test/Lint -> Rule -> Solution Doc`) after closing non-trivial bugs.
 12. **3-Tier Auto Triage Gate (`Tier 0–2` + `run_workflow`):**

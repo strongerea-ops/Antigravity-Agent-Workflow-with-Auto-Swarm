@@ -181,6 +181,78 @@ class TestWorkflowOps(unittest.TestCase):
             after_msg = after["injectSteps"][0]["systemMessage"]["systemMessage"]
             self.assertNotIn("First-Time Setup — Language Selection", after_msg)
 
+    def test_rollback_dry_run_apply_and_sha256_mismatch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "AGENTS.md"
+            target.write_text("# Original\n", encoding="utf-8")
+
+            bdir = workflow_ops.run_backup(topic="rb_test", files=["AGENTS.md", "new_added.txt"], repo_root=root)
+            target.write_text("# Mutated\n", encoding="utf-8")
+            added = root / "new_added.txt"
+            added.write_text("temporary\n", encoding="utf-8")
+
+            preview = workflow_ops.run_rollback(backup_dir=bdir, apply=False, repo_root=root)
+            self.assertEqual(preview["restored"], ["AGENTS.md"])
+            self.assertEqual(preview["removed"], ["new_added.txt"])
+            self.assertEqual(target.read_text(encoding="utf-8"), "# Mutated\n")
+            self.assertTrue(added.is_file())
+
+            applied = workflow_ops.run_rollback(backup_dir=bdir, apply=True, repo_root=root)
+            self.assertEqual(applied["restored"], ["AGENTS.md"])
+            self.assertEqual(target.read_text(encoding="utf-8"), "# Original\n")
+            self.assertFalse(added.exists())
+
+            (bdir / "AGENTS.md").write_text("# Tampered\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                workflow_ops.run_rollback(backup_dir=bdir, apply=True, repo_root=root)
+
+    def test_prune_30d_auto_prune_on_backup_and_never_touches_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            old_backup = root / "backup" / "20200101T000000000000Z_ancient"
+            old_backup.mkdir(parents=True)
+            (old_backup / "manifest.json").write_text("{}", encoding="utf-8")
+
+            art_file = root / "artifacts" / "notes" / "keep_me.md"
+            art_file.parent.mkdir(parents=True)
+            art_file.write_text("# User Reference\n", encoding="utf-8")
+
+            dry = workflow_ops.run_prune(keep_days=30, apply=False, repo_root=root)
+            self.assertEqual(len(dry["backup_candidates"]), 1)
+            self.assertTrue(old_backup.is_dir())
+
+            (root / "AGENTS.md").write_text("# Current\n", encoding="utf-8")
+            fresh_backup = workflow_ops.run_backup(topic="fresh_change", files=["AGENTS.md"], repo_root=root)
+            self.assertFalse(old_backup.exists())
+            self.assertTrue(fresh_backup.is_dir())
+            self.assertTrue(art_file.is_file())
+
+    def test_inspect_tools_mode_and_boundary_guard(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            tool_file = root / "artifacts" / "tools" / "check_ok.py"
+            tool_file.parent.mkdir(parents=True)
+            tool_file.write_text("print('tool ok')\n", encoding="utf-8")
+            report_path = root / "artifacts" / "reports" / "inspect.json"
+
+            res = workflow_ops.run_inspect(
+                mode="tools-only",
+                tools=["artifacts/tools/check_ok.py"],
+                report=report_path,
+                repo_root=root,
+            )
+            self.assertEqual(res["overall_status"], "PASS")
+            self.assertEqual(res["exit_code"], 0)
+            self.assertTrue(report_path.is_file())
+
+            with self.assertRaises(ValueError):
+                workflow_ops.resolve_inspect_script("../outside.py", root)
+            outside_tools = root / "README.py"
+            outside_tools.write_text("print('nope')\n", encoding="utf-8")
+            with self.assertRaises(ValueError):
+                workflow_ops.resolve_inspect_script("README.py", root)
+
 
 class TestWorkflowHooks(unittest.TestCase):
     def test_session_start_graceful_empty_and_rehydration(self) -> None:
@@ -272,6 +344,35 @@ class TestWorkflowHooks(unittest.TestCase):
             )
             self.assertEqual(res["decision"], "deny")
             self.assertIn("unittest", res["reason"])
+
+    def test_pre_tool_blocks_git_branch_destructive_git_and_artifacts_deletion(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            blocked_cmds = [
+                "git checkout -b feat/unauthorized",
+                "git switch -c feat/unauthorized",
+                "git branch new_branch",
+                "git reset --hard HEAD",
+                "git clean -fd",
+                "git checkout -- .",
+                "rm -rf artifacts/diffs",
+                "Remove-Item -Recurse -Force artifacts/reviews",
+                "python -c \"import shutil; shutil.rmtree('artifacts/old')\"",
+            ]
+            for cmd in blocked_cmds:
+                payload = {"toolCall": {"name": "run_command", "args": {"CommandLine": cmd}}}
+                res = workflow_hooks.handle_pre_tool(payload, repo_root=root)
+                self.assertEqual(res["decision"], "deny", f"Expected deny for: {cmd}")
+
+            allowed_cmds = [
+                "git status --short",
+                "git branch -a",
+                "python .agents/scripts/verify_workflow.py",
+            ]
+            for cmd in allowed_cmds:
+                payload = {"toolCall": {"name": "run_command", "args": {"CommandLine": cmd}}}
+                res = workflow_hooks.handle_pre_tool(payload, repo_root=root)
+                self.assertEqual(res["decision"], "allow", f"Expected allow for: {cmd}")
 
     def test_stop_hook_respects_continuation_active(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

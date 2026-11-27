@@ -24,10 +24,11 @@ You do **not** need a programming background to use this workflow. It turns your
 | **Skill** | A step-by-step playbook opened only when needed so the AI's memory stays light and fast. |
 | **Hook** | An automatic background guard that runs at key moments (opening a chat, before saving a file, after saving a file) to enforce backups and catch mistakes. |
 | **Checkpoint** | A short progress snapshot saved automatically after each turn (keeps the latest `15`) so a new chat remembers where you left off in seconds. |
-| **Pre-Action Backup** | A safety copy of files saved inside `backup/` before the AI edits them, so you can always roll back cleanly. |
+| **Pre-Action Backup (`<= 30` days)** | A safety copy of files saved inside `backup/` before the AI edits them (backups older than `30` days are auto-pruned; `artifacts/` are never auto-deleted). |
+| **`rollback` / `prune` / `inspect`** | Built-in CLI helpers in `workflow_ops.py`: `rollback` restores files with `SHA-256` checks (dry-run by default), `prune` cleans expired `backup/` folders (`> 30` days), and `inspect` runs all health gates in one command. |
 | **Diff (`.diff` file)** | A clean before-and-after record showing only the lines that changed. |
 | **Placeholder (`{{LIKE_THIS}}`)** | A fill-in-the-blank label where you put your own project's name, folders, or commands. |
-| **`/handoff` vs. `/compact`** | Two ways to handle a long chat: **`/handoff`** packs everything neatly for a brand-new chat window; **`/compact`** shrinks old messages to continue in the current window. |
+| **`/handoff` vs. `/compact`** | Two ways to handle a long chat: **`/handoff`** packs everything neatly for a brand-new chat window; **`/compact`** is a built-in Antigravity command (type `/compact` and press `Enter`) to shrink old messages in the current window. |
 
 ### The 6 Building Blocks
 
@@ -46,7 +47,7 @@ You do **not** need a programming background to use this workflow. It turns your
 |---|---|---|
 | `AGENTS.md` `24,000`-byte cap & folder discovery | **Antigravity App (Automatic)** | Truncated above 24 KB; Antigravity walks up from opened files to the workspace root. |
 | `SessionStart` language check, memory & bug check (`hooks.json`) | **Hook Script (Automatic)** | Runs `scripts/workflow_hooks.py session-start` (with working folder `.agents/`) to spot unfilled `{{CHAT_AND_ARTIFACTS_LANGUAGE}}`, load the latest checkpoint/handoff pointer, and remind you about unresolved `3–7` day bug reports. |
-| `PreToolUse` backup & forbidden-command guard | **Hook Script (Automatic)** | Blocks `edit_file`/`write_file` if today's backup is missing, and blocks `run_command` matching any configured forbidden pattern. |
+| `PreToolUse` backup, Git & `artifacts/` guard | **Hook Script (Automatic)** | Blocks `edit_file`/`write_file` if today's backup is missing, blocks unauthorized Git branch creation (`checkout -b`, `switch -c`, `branch <name>`), blocks destructive Git (`reset --hard`, `clean -f`, `checkout -- .`), blocks commands that delete `artifacts/`, and evaluates custom forbidden patterns. |
 | `PostToolUse` workflow health check (`last_alert.log`) | **Hook Script (Automatic)** | Runs `verify_workflow.audit_workspace()` after editing workflow files; writes or clears `.agents/ck/last_alert.log`. |
 | `Stop` alert gate (`alert-stop-gate`, opt-in) | **Hook Script (Automatic when enabled)** | Off by default (`"enabled": false`); safely stops after one retry check (`continuationActive`) to prevent loops. |
 | `verify_workflow.py` & `test_workflow_ops_and_hooks.py` | **CLI Tool (Automatic)** | Returns exact `Exit 0` (pass) or `Exit 1` (fail) for schemas, links, file encoding, syntax, and hook behavior. |
@@ -69,7 +70,7 @@ You do **not** need a programming background to use this workflow. It turns your
    - **Tier 0 In-line:** Tiny 1–2 line fixes or quick questions (`<= 3` reads) finish right in chat.
    - **Tier 1 `invoke_subagent`:** Focused tasks (`@researcher`, `@builder`, `@verifier`) or `1–8` edited files.
    - **Tier 2 `swarm` / `run_workflow`:** `>= 9` edited files or `>= 2` separate workstreams scale to a team (`Pool C` Claude/GPT to `0%` first → `Pool B` `gemini-4-argon-*` → `Pool A` `gemini-4-neon-*`, halting Auto-Swarm below `20%` fallback quota). On dirty Git working trees (unsaved local changes), workers strictly use `workspace:"inherit"` with non-overlapping files so uncommitted work is never lost.
-6. **Clean Code Hygiene & Permanent Learning:** Pre-Action Backup + `-U1` Diff (works even without Git), Read-Only `@verifier`, Self-Mistake Governance (if the AI slips up, it proposes a rule improvement and asks `/approve`), Zero In-Code Comments (notes live neatly in `artifacts/comments/`), clean separation of reusable `artifacts/tools/` vs. disposable `artifacts/scratch/`, `3–7` day unresolved bug reminders, 3-part Evidence-Based Objection, Attack the Premise ($N=2$), Circuit Breaker ($N \ge 3$), and Compound Learning (`/compound`).
+6. **Clean Code Hygiene, Safe Retention & Permanent Learning:** Pre-Action Backup (auto-pruned after `30` days) + `SHA-256` verified `rollback` + `-U1` Diff (works even without Git) + unified `inspect` gates; `artifacts/` are user-managed reference materials (**never auto-deleted**, protected by `PreToolUse` hook — if an artifact conflicts with current rules, the assistant alerts you with options); temporary one-off scripts live in Antigravity's built-in session `scratch/` folder (not workspace `artifacts/scratch/`) while reusable scripts live in `artifacts/tools/`; Read-Only `@verifier`, Self-Mistake Governance, Zero In-Code Comments (`artifacts/comments/`), `3–7` day unresolved bug reminders, 3-part Evidence-Based Objection, Attack the Premise ($N=2$), Circuit Breaker ($N \ge 3$), and Compound Learning (`/compound`).
 7. **Optional Power Add-Ons:** Ready-to-adapt parallel Python workflow ([project_fanout.py](./.agents/workflows/project_fanout.py) + [workflow.json](./.agents/workflows/workflow.json)), MCP server example ([mcp_config.example.json](./.agents/templates/mcp_config.example.json)), and scheduled background cron example ([sidecar.schedule.example.json](./.agents/templates/sidecar.schedule.example.json)).
 
 ---
@@ -88,8 +89,10 @@ You do **not** need a programming background to use this workflow. It turns your
 | Find the real cause of an error or bug | `/debug <problem>` | Type in chat or click when offered |
 | Run real tests / check changes | `/test` or `/audit` | Type in chat or click when offered |
 | Move a long chat to a fresh window | `/handoff` | Click **`/handoff`** in the menu (or type `/handoff`) |
-| Shrink a long chat and stay here | `/compact` | Type `/compact` directly in the chat box |
-| Let the AI interview you to clarify a vague idea | `/grill-me` | Type `/grill-me` directly in the chat box |
+| Shrink a long chat and stay here | `/compact` | Type `/compact` in the chat box and press `Enter` |
+| Undo recent changes or clean old backups | `workflow_ops.py rollback` / `prune` | Dry-run preview first; add `--apply` to execute |
+| Run all workflow checks in one go | `workflow_ops.py inspect --mode quick` | Runs audit + self-tests (+ optional `--tool` scripts) |
+| Let the AI interview you to clarify a vague idea | `/grill-me` | Type `/grill-me` in the chat box and press `Enter` |
 
 ### A. Native Antigravity Slash Commands
 *(Typed directly in the Antigravity chat input — cannot be executed programmatically by an agent)*
@@ -146,8 +149,11 @@ You do **not** need a programming background to use this workflow. It turns your
 | `python .agents/scripts/workflow_ops.py set-language --lang "<Language>"` | Set your preferred chat & `artifacts/` language across workflow files (saves a backup automatically). |
 | `python .agents/scripts/workflow_ops.py check-placeholders` | List every unfilled `{{PLACEHOLDER}}` blank with exact file and line numbers. |
 | `python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found` | Same scan, returning `Exit 1` if any blank is still unfilled (readiness check). |
-| `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | Save a timestamped safety copy + `SHA-256` manifest under `backup/`. |
+| `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | Save a timestamped safety copy + `SHA-256` manifest under `backup/` (auto-prunes backups older than `30` days). |
 | `python .agents/scripts/workflow_ops.py diff --output "artifacts/diffs/YYYY-MM-DD/<slug>.diff"` | Save a clean before-and-after `.diff` against the latest backup (works without Git). |
+| `python .agents/scripts/workflow_ops.py rollback --backup "<dir>" [--apply]` | Dry-run preview (default) or `--apply` to restore `SHA-256`-verified files and remove newly created `absent` files. |
+| `python .agents/scripts/workflow_ops.py prune --keep-days 30 [--apply]` | Dry-run preview (default) or `--apply` to delete `backup/` entries older than `30` days (never touches `artifacts/`). |
+| `python .agents/scripts/workflow_ops.py inspect --mode quick` | Run unified health gates (`quick` / `full` / `tools-only`, optional `--tool`, `--fail-fast`, `--json`, `--report`). |
 | `python .agents/scripts/workflow_ops.py log-turn --title "<t>" --summary "<s>"` | Log the session summary in `artifacts/Conversations/` and update the Rolling `15` Checkpoints. |
 | `python .agents/scripts/workflow_ops.py handoff --objective "<obj>"` | Build a fresh-window handoff packet (`.agents/ck/HANDOFF.md` + `artifacts/handoffs/`) and starter prompt. |
 | `python .agents/scripts/verify_workflow.py` | Check all workflow rules, agents, skills, hooks, links, and encoding (`Exit 0` = healthy). |

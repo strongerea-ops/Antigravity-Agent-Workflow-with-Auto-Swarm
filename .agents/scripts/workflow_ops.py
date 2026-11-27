@@ -5,8 +5,11 @@ Portable Agent Workflow — Unified Operations CLI
 Pure Python 3.10+ Standard Library only.
 Commands:
   set-language        Configure {{CHAT_AND_ARTIFACTS_LANGUAGE}} for first-time setup (with backup)
-  backup              Pre-Action microsecond backup with SHA-256 manifest.json
+  backup              Pre-Action microsecond backup with SHA-256 manifest.json (auto-prunes >30d backups)
   diff                Unified diff (-U1) against backup manifest (works without .git)
+  rollback            Preview or restore files & remove absent entries from a backup manifest (SHA-256 verified)
+  prune               Preview or delete backup/ entries older than 30 days (never touches artifacts/)
+  inspect             Run unified workflow health gates (+ optional --tool scripts under artifacts/tools/)
   log-turn            Append daily conversation log, update README, rotate Rolling 15 Checkpoints
   handoff             Generate new-window handoff packet (.agents/ck/HANDOFF.md + artifacts/handoffs/)
   check-placeholders  Scan workflow templates for remaining {{PLACEHOLDER}} tokens
@@ -16,16 +19,25 @@ import argparse
 import difflib
 import hashlib
 import json
+import os
 import re
 import shutil
+import stat
+import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MAX_CHECKPOINTS = 15
+BACKUP_MAX_RETENTION_DAYS = 30
 PLACEHOLDER_RE = re.compile(r"\{\{[A-Z0-9_]+\}\}")
+ALLOWED_INSPECT_SCRIPT_ROOTS: Tuple[Tuple[str, ...], ...] = (
+    ("artifacts", "tools"),
+    (".agents", "scripts"),
+)
 
 
 def _utc_now() -> datetime:
@@ -58,8 +70,9 @@ def run_backup(
     files: List[str],
     desc: Optional[str] = None,
     repo_root: Optional[Path] = None,
+    auto_prune_days: Optional[int] = BACKUP_MAX_RETENTION_DAYS,
 ) -> Path:
-    """Creates backup/YYYYMMDDTHHMMSSffffffZ_<topic>/ with RFC 3339 UTC manifest.json."""
+    """Creates backup/YYYYMMDDTHHMMSSffffffZ_<topic>/ with RFC 3339 UTC manifest.json and prunes backups older than 30 days."""
     root = (repo_root or REPO_ROOT).resolve()
     now = _utc_now()
     ts_basic = _format_basic_utc(now)
@@ -106,6 +119,8 @@ def run_backup(
         json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     print(f"[Backup] Created {backup_dir.relative_to(root).as_posix()} ({len(manifest_files)} entries)")
+    if auto_prune_days is not None:
+        run_prune(keep_days=auto_prune_days, apply=True, repo_root=root, quiet_if_empty=True)
     return backup_dir
 
 
@@ -585,6 +600,349 @@ def run_check_placeholders(repo_root: Optional[Path] = None, fail_on_found: bool
     return 1 if fail_on_found else 0
 
 
+def _parse_backup_utc(item: Path) -> datetime:
+    fallback = datetime.fromtimestamp(item.stat().st_mtime, tz=timezone.utc)
+    match = re.match(r"^(\d{8})T(\d{6})(\d{6})Z", item.name)
+    if match:
+        try:
+            return datetime.strptime(
+                f"{match.group(1)}{match.group(2)}{match.group(3)}", "%Y%m%d%H%M%S%f"
+            ).replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    match_day = re.match(r"^(\d{8})(?:[-_]|$)", item.name)
+    if match_day:
+        try:
+            return datetime.strptime(match_day.group(1), "%Y%m%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            pass
+    if item.is_dir():
+        manifest_file = item / "manifest.json"
+        if manifest_file.is_file():
+            try:
+                data = json.loads(manifest_file.read_text(encoding="utf-8"))
+                ts = str(data.get("timestamp") or "").strip()
+                if ts.endswith("Z"):
+                    ts = ts[:-1] + "+00:00"
+                if ts:
+                    parsed = datetime.fromisoformat(ts)
+                    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+            except (OSError, ValueError, json.JSONDecodeError):
+                pass
+    return fallback
+
+
+def _dir_size_bytes(path: Path) -> int:
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    for item in path.rglob("*"):
+        if item.is_file():
+            try:
+                total += item.stat().st_size
+            except OSError:
+                continue
+    return total
+
+
+def _remove_entry_safe(path: Path, retries: int = 3, delay_sec: float = 0.15) -> Optional[str]:
+    def _handle_readonly(func: Any, target_path: str, exc: BaseException) -> None:
+        if isinstance(exc, PermissionError):
+            try:
+                os.chmod(target_path, stat.S_IWRITE)
+                func(target_path)
+                return
+            except OSError:
+                raise exc
+        raise exc
+
+    last_err: Optional[str] = None
+    for attempt in range(retries):
+        try:
+            if path.is_dir() and not path.is_symlink():
+                if sys.version_info >= (3, 12):
+                    shutil.rmtree(path, onexc=_handle_readonly)
+                else:
+                    shutil.rmtree(path, onerror=lambda f, p, ei: _handle_readonly(f, p, ei[1]))
+            else:
+                try:
+                    path.unlink(missing_ok=True)
+                except PermissionError:
+                    os.chmod(path, stat.S_IWRITE)
+                    path.unlink(missing_ok=True)
+            return None
+        except OSError as exc:
+            last_err = str(exc)
+            if attempt + 1 < retries:
+                time.sleep(delay_sec * (attempt + 1))
+    return last_err
+
+
+def run_rollback(
+    backup_dir: Optional[Path] = None,
+    apply: bool = False,
+    repo_root: Optional[Path] = None,
+) -> Dict[str, List[str]]:
+    """Restores backed_up files (verifying SHA-256) and removes absent files per manifest.json."""
+    root = (repo_root or REPO_ROOT).resolve()
+    bdir = (
+        (backup_dir if backup_dir.is_absolute() else root / backup_dir).resolve()
+        if backup_dir
+        else _find_latest_backup(root)
+    )
+    manifest_path = bdir / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"Backup manifest not found: {manifest_path}")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    files_map = manifest.get("files")
+    if not isinstance(files_map, dict):
+        raise ValueError(f"Invalid manifest files map in {manifest_path}")
+
+    planned_restore: List[Tuple[str, Path, Path]] = []
+    planned_remove: List[Tuple[str, Path]] = []
+    unchanged: List[str] = []
+
+    for raw_rel, entry in files_map.items():
+        rel_path = str(raw_rel).replace("\\", "/")
+        dest = (root / rel_path).resolve()
+        try:
+            dest.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"Refusing path outside repo root: {rel_path}") from exc
+        if not isinstance(entry, dict):
+            continue
+        status = entry.get("status")
+        if status == "backed_up":
+            backup_name = str(entry.get("backup_file") or "")
+            src = bdir / backup_name
+            if not backup_name or not src.is_file():
+                raise FileNotFoundError(f"Missing backup file for {rel_path}: {src}")
+            expected_sha = str(entry.get("sha256") or "")
+            if expected_sha:
+                actual_sha = hashlib.sha256(src.read_bytes()).hexdigest()
+                if actual_sha != expected_sha:
+                    raise ValueError(
+                        f"SHA-256 mismatch for {rel_path}: expected {expected_sha}, got {actual_sha}"
+                    )
+            planned_restore.append((rel_path, src, dest))
+        elif status == "absent":
+            if dest.is_file():
+                planned_remove.append((rel_path, dest))
+            else:
+                unchanged.append(rel_path)
+
+    restored: List[str] = []
+    removed: List[str] = []
+    for rel_path, src, dest in planned_restore:
+        if apply:
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dest)
+        restored.append(rel_path)
+    for rel_path, dest in planned_remove:
+        if apply:
+            dest.unlink(missing_ok=True)
+        removed.append(rel_path)
+
+    mode_label = "Applied" if apply else "Dry-Run"
+    print(
+        f"[Rollback {mode_label}] source={bdir.name} restore={len(restored)} "
+        f"remove={len(removed)} unchanged={len(unchanged)}"
+    )
+    return {"restored": restored, "removed": removed, "unchanged": unchanged}
+
+
+def run_prune(
+    keep_days: int = BACKUP_MAX_RETENTION_DAYS,
+    apply: bool = False,
+    repo_root: Optional[Path] = None,
+    quiet_if_empty: bool = False,
+) -> Dict[str, object]:
+    """Previews or deletes backup/ entries older than keep_days (default 30). Never touches artifacts/."""
+    if keep_days < 0:
+        raise ValueError("keep_days must be non-negative")
+    root = (repo_root or REPO_ROOT).resolve()
+    now = _utc_now()
+    cutoff_ts = now.timestamp() - (keep_days * 86400)
+    today_utc = now.date()
+
+    backup_candidates: List[Path] = []
+    backup_base = root / "backup"
+    if backup_base.is_dir():
+        entries = list(backup_base.iterdir())
+        entries.sort(key=lambda d: (_parse_backup_utc(d), d.name), reverse=True)
+        for item in entries:
+            item_dt = _parse_backup_utc(item)
+            if keep_days > 0 and item_dt.date() >= today_utc:
+                continue
+            if item_dt.timestamp() < cutoff_ts:
+                backup_candidates.append(item)
+
+    reclaimed_bytes = sum(_dir_size_bytes(p) for p in backup_candidates)
+    deleted_backups: List[str] = []
+    skipped_locked: List[str] = []
+
+    if apply:
+        reclaimed_bytes = 0
+        for item in backup_candidates:
+            item_bytes = _dir_size_bytes(item)
+            err = _remove_entry_safe(item)
+            rel_item = item.relative_to(root).as_posix()
+            if err is None:
+                deleted_backups.append(rel_item)
+                reclaimed_bytes += item_bytes
+            else:
+                skipped_locked.append(f"{rel_item}: {err}")
+
+    if not quiet_if_empty or backup_candidates or skipped_locked:
+        mode_label = "Applied" if apply else "Dry-Run"
+        reclaimed_mb = reclaimed_bytes / (1024 * 1024)
+        print(
+            f"[Prune {mode_label}] backups={len(deleted_backups) if apply else len(backup_candidates)} "
+            f"skipped_locked={len(skipped_locked)} reclaimable={reclaimed_mb:.2f} MB"
+        )
+        for locked_note in skipped_locked:
+            print(f"[Prune Skipped] {locked_note}", file=sys.stderr)
+    return {
+        "backup_candidates": [p.relative_to(root).as_posix() for p in backup_candidates],
+        "deleted_backups": deleted_backups,
+        "skipped_locked": skipped_locked,
+        "reclaimed_bytes": reclaimed_bytes,
+    }
+
+
+def resolve_inspect_script(raw_path: str, repo_root: Path) -> Path:
+    """Resolves a --tool script strictly inside artifacts/tools/ or .agents/scripts/."""
+    root = repo_root.resolve()
+    candidate = Path(raw_path.strip())
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    resolved = candidate.resolve()
+    try:
+        rel = resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Script path outside repository root is blocked: {raw_path}") from exc
+    parts_lower = tuple(p.lower() for p in rel.parts)
+    in_allowed = any(
+        len(parts_lower) > len(prefix) and parts_lower[: len(prefix)] == prefix
+        for prefix in ALLOWED_INSPECT_SCRIPT_ROOTS
+    )
+    if not in_allowed:
+        raise ValueError(
+            f"Script must reside under artifacts/tools/ or .agents/scripts/: {rel.as_posix()}"
+        )
+    if resolved.suffix.lower() != ".py":
+        raise ValueError(f"Only .py scripts are supported for --tool: {rel.as_posix()}")
+    if not resolved.is_file():
+        raise FileNotFoundError(f"Tool script not found: {rel.as_posix()}")
+    return resolved
+
+
+def run_inspect(
+    mode: str = "quick",
+    tools: Optional[Sequence[str]] = None,
+    timeout: int = 120,
+    fail_fast: bool = False,
+    json_output: bool = False,
+    report: Optional[Path] = None,
+    repo_root: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Runs standardized workflow health gates and optional --tool scripts in one command."""
+    root = (repo_root or REPO_ROOT).resolve()
+    gates: List[Tuple[str, str, List[str]]] = []
+
+    if mode in ("quick", "full"):
+        verifier = root / ".agents" / "scripts" / "verify_workflow.py"
+        if verifier.is_file():
+            gates.append(("verify_workflow", "workflow", [sys.executable, str(verifier), "--root", str(root)]))
+        scripts_dir = root / ".agents" / "scripts"
+        if scripts_dir.is_dir() and list(scripts_dir.glob("test_*.py")):
+            gates.append(
+                (
+                    "workflow_unittest",
+                    "test",
+                    [sys.executable, "-m", "unittest", "discover", "-s", ".agents/scripts", "-p", "test_*.py"],
+                )
+            )
+    if mode == "full":
+        ops_script = root / ".agents" / "scripts" / "workflow_ops.py"
+        if ops_script.is_file():
+            gates.append(
+                (
+                    "check_placeholders",
+                    "setup",
+                    [sys.executable, str(ops_script), "check-placeholders", "--repo-root", str(root)],
+                )
+            )
+
+    for raw_tool in tools or []:
+        resolved_tool = resolve_inspect_script(raw_tool, root)
+        rel_tool = resolved_tool.relative_to(root).as_posix()
+        gates.append((f"tool:{rel_tool}", "tool", [sys.executable, str(resolved_tool)]))
+
+    results: List[Dict[str, Any]] = []
+    failed = 0
+    for name, category, cmd in gates:
+        t0 = time.monotonic()
+        try:
+            proc = subprocess.run(
+                cmd,
+                cwd=str(root),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                check=False,
+            )
+            exit_code = proc.returncode
+            combined = ((proc.stdout or "") + "\n" + (proc.stderr or "")).strip()
+            tail = "\n".join(line.rstrip() for line in combined.splitlines()[-12:])
+            status = "PASS" if exit_code == 0 else "FAIL"
+        except subprocess.TimeoutExpired:
+            exit_code = 124
+            tail = f"Timed out after {timeout}s"
+            status = "FAIL"
+        duration = round(time.monotonic() - t0, 3)
+        results.append(
+            {
+                "name": name,
+                "category": category,
+                "status": status,
+                "exit_code": exit_code,
+                "duration_sec": duration,
+                "tail_output": tail,
+            }
+        )
+        if status != "PASS":
+            failed += 1
+            if fail_fast:
+                break
+
+    summary: Dict[str, Any] = {
+        "timestamp": _format_rfc3339_utc(_utc_now()),
+        "mode": mode,
+        "overall_status": "PASS" if failed == 0 else "FAIL",
+        "exit_code": 0 if failed == 0 else 1,
+        "total_gates": len(results),
+        "failed_gates": failed,
+        "gates": results,
+    }
+    if report is not None:
+        out_path = (report if report.is_absolute() else root / report).resolve()
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_text(json.dumps(summary, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+    if json_output:
+        print(json.dumps(summary, indent=2, ensure_ascii=False))
+    else:
+        print(
+            f"[Inspect {summary['overall_status']}] mode={mode} gates={len(results)} failed={failed}"
+        )
+        for item in results:
+            print(
+                f"  - [{item['status']}] {item['name']} (exit={item['exit_code']}, {item['duration_sec']}s)"
+            )
+    return summary
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Portable Agent Workflow — Unified Ops CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -599,6 +957,46 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--backup", default=None, help="Backup directory (defaults to latest)")
     d.add_argument("--output", default=None, help="Optional .diff output file path")
     d.add_argument("--repo-root", default=None, help="Override repository root")
+
+    rb = subparsers.add_parser(
+        "rollback", help="Preview or restore files & remove absent entries from a backup manifest"
+    )
+    rb.add_argument("--backup", default=None, help="Specific backup folder path (defaults to latest)")
+    rb.add_argument("--apply", action="store_true", help="Apply rollback changes (default is dry-run preview)")
+    rb.add_argument("--repo-root", default=None, help="Override repository root")
+
+    pr = subparsers.add_parser(
+        "prune", help="Preview or delete backup/ entries older than 30 days (never touches artifacts/)"
+    )
+    pr.add_argument(
+        "--keep-days",
+        type=int,
+        default=BACKUP_MAX_RETENTION_DAYS,
+        help="Maximum backup retention in days (default: 30)",
+    )
+    pr.add_argument("--apply", action="store_true", help="Delete expired backups (default is dry-run preview)")
+    pr.add_argument("--repo-root", default=None, help="Override repository root")
+
+    ins = subparsers.add_parser(
+        "inspect", help="Run unified workflow health gates (+ optional --tool scripts under artifacts/tools/)"
+    )
+    ins.add_argument(
+        "--mode",
+        choices=("quick", "full", "tools-only"),
+        default="quick",
+        help="Inspection depth profile (default: quick)",
+    )
+    ins.add_argument(
+        "--tool",
+        action="append",
+        default=[],
+        help="Reusable .py tool script under artifacts/tools/ or .agents/scripts/ (repeatable)",
+    )
+    ins.add_argument("--timeout", type=int, default=120, help="Per-gate timeout in seconds (default: 120)")
+    ins.add_argument("--fail-fast", action="store_true", help="Stop immediately on first failing gate")
+    ins.add_argument("--json", action="store_true", dest="json_output", help="Output JSON report to stdout")
+    ins.add_argument("--report", default=None, help="Optional output path to save JSON report")
+    ins.add_argument("--repo-root", default=None, help="Override repository root")
 
     lg = subparsers.add_parser("log-turn", help="Log turn to Conversations/ and rotate checkpoints")
     lg.add_argument("--title", required=True, help="Turn title")
@@ -646,6 +1044,27 @@ def main(argv: Optional[List[str]] = None) -> int:
             repo_root=root,
         )
         return 0
+    if args.command == "rollback":
+        run_rollback(
+            backup_dir=Path(args.backup) if args.backup else None,
+            apply=args.apply,
+            repo_root=root,
+        )
+        return 0
+    if args.command == "prune":
+        run_prune(keep_days=args.keep_days, apply=args.apply, repo_root=root)
+        return 0
+    if args.command == "inspect":
+        result = run_inspect(
+            mode=args.mode,
+            tools=args.tool,
+            timeout=args.timeout,
+            fail_fast=args.fail_fast,
+            json_output=args.json_output,
+            report=Path(args.report) if args.report else None,
+            repo_root=root,
+        )
+        return int(result["exit_code"])
     if args.command == "log-turn":
         run_log_turn(
             title=args.title,

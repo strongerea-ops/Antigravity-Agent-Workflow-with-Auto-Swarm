@@ -41,6 +41,31 @@ FORBIDDEN_COMMAND_PATTERNS: List[Tuple[str, str]] = [
     ),
 ]
 
+BUILTIN_GIT_BRANCH_RE = re.compile(
+    r"\bgit\s+(?:checkout\s+-[bB]\b|switch\s+(?:-[cC]|--create)\b|branch\s+(?!-)[A-Za-z0-9._/-]+)",
+    re.IGNORECASE,
+)
+BUILTIN_DESTRUCTIVE_GIT_PATTERNS: Tuple[Tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(r"\bgit\s+(?:reset\s+--hard\b|clean\s+-[a-zA-Z]*f)", re.IGNORECASE),
+        "Blocked: Destructive git reset --hard / git clean -f is prohibited to protect existing user work.",
+    ),
+    (
+        re.compile(r"\bgit\s+checkout\s+--\s+\.", re.IGNORECASE),
+        "Blocked: Destructive git checkout -- . is prohibited to protect uncommitted work.",
+    ),
+)
+BUILTIN_ARTIFACTS_DELETE_PATTERNS: Tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"\b(?:remove-item|rm|del|erase|rd|rmdir|ri)\b[^\n;|&]*\bartifacts(?:[\\/]|$|\s|['\"])",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:shutil\.rmtree|os\.remove|os\.unlink|\.unlink\s*\()[^\n]*artifacts",
+        re.IGNORECASE,
+    ),
+)
+
 
 def _read_stdin_payload(stdin_text: Optional[str] = None) -> Dict[str, Any]:
     raw = stdin_text if stdin_text is not None else sys.stdin.read()
@@ -337,7 +362,25 @@ def handle_pre_tool(
         return {"decision": "allow"}
 
     if tool_name == "run_command":
-        cmd = str(args.get("CommandLine") or args.get("command") or "")
+        cmd = str(args.get("CommandLine") or args.get("commandLine") or args.get("command") or "")
+        if BUILTIN_GIT_BRANCH_RE.search(cmd):
+            return {
+                "decision": "deny",
+                "reason": "Blocked: Never create a new Git branch unless explicitly instructed (AGENTS.md Rule 6.2).",
+            }
+        for git_pat, git_reason in BUILTIN_DESTRUCTIVE_GIT_PATTERNS:
+            if git_pat.search(cmd):
+                return {"decision": "deny", "reason": git_reason}
+        for art_pat in BUILTIN_ARTIFACTS_DELETE_PATTERNS:
+            if art_pat.search(cmd):
+                return {
+                    "decision": "deny",
+                    "reason": (
+                        "Blocked: Automatic deletion under artifacts/ is prohibited. "
+                        "Documents in artifacts/ are user-managed reference materials; "
+                        "report conflicts and recommend options to the user instead."
+                    ),
+                }
         for pattern, message in forbidden_patterns:
             if not pattern or "{{" in pattern or "}}" in pattern:
                 continue

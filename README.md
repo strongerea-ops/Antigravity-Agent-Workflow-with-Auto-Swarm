@@ -18,7 +18,7 @@ Even if you are **not a programmer**, you can drop these files into any project 
 
 - **Pick Your Language on Day 1 (No Editing Needed):** The first time you open a chat, the assistant automatically shows a clickable menu to choose your preferred language (English, Thai, Japanese, Chinese, or any language). It keeps internal rules in English behind the scenes to save AI memory, while talking to you in plain, everyday words.
 - **Click Instead of Typing Commands:** You get clickable menus (`ask_question`) when choosing your language, approving a plan (`/approve`), switching or compacting a long chat (`/handoff` vs. `/compact`), and choosing from recommended next commands.
-- **Always Plans, Backs Up & Asks Before Editing:** Before touching important files, the assistant explains the plan in simple terms, checks for conflicts, asks for your click-to-approve, and automatically saves a **Backup copy** first so nothing is lost.
+- **Always Plans, Backs Up, Protects & Rolls Back Safely:** Before touching important files, the assistant explains the plan in simple terms, checks for conflicts, asks for your click-to-approve, and saves a **Backup copy** first (kept up to **30 days** automatically). Built-in safety hooks also block accidental Git branch creation, destructive Git resets, and automatic deletion of your `artifacts/` reference notes, while `rollback`, `prune`, and `inspect` commands let you preview and recover cleanly.
 - **A Small, Organized 4-Role AI Team:**
   - `@lead` — **Project Manager:** listens to you, makes plans, asks for approval, and summarizes results.
   - `@builder` — **Maker:** makes the exact edits you approved after saving a backup.
@@ -37,9 +37,11 @@ Even if you are **not a programmer**, you can drop these files into any project 
 | See full technical details | `/more-detail` | Shows exact files, line numbers, and full command outputs |
 | Something broke — find the real cause | `/debug <problem>` | Investigates step-by-step instead of guessing |
 | Chat is getting long — start a fresh window | `/handoff` *(clickable menu)* | Creates a handover note + ready-to-paste prompt for a brand-new chat |
-| Chat is getting long — stay in this window | `/compact` *(type in chat)* | Compresses old messages in Antigravity so you can keep going here |
+| Chat is getting long — stay in this window | `/compact` *(type & press `Enter`)* | Compresses old messages in Antigravity so you can keep going here |
+| Undo recent changes or clean backups >30d | `workflow_ops.py rollback` / `prune` | Safe preview first (`dry-run`); add `--apply` to restore (`SHA-256`) or prune old backups |
+| Run all health checks in one command | `workflow_ops.py inspect --mode quick` | Runs workflow audit + self-tests (+ optional reusable `--tool` scripts) |
 
-*(Note: Clicking a workflow command like `/handoff` or `/vibe` runs it immediately. Built-in Antigravity commands like `/compact` or `/plan` are typed directly into the chat box.)*
+*(Note: Clicking a workflow command like `/handoff` or `/vibe` runs it immediately. Built-in Antigravity commands like `/compact` or `/plan` must be typed directly into the chat box followed by pressing `Enter`.)*
 
 ### 3-Minute Quick Start
 
@@ -95,8 +97,8 @@ Antigravity-Agent-Workflow-with-Auto-Swarm/
 ├── .agents/
 │   ├── rules/                             # Task-based rules (4 focused files — read only what's needed)
 │   │   ├── rules.md                       # Task index & dirty-tree swarm safety rule
-│   │   ├── coding-and-safety.md           # Critical files, clean code notes, backup & rollback
-│   │   ├── commands-and-tools.md          # Hook folder rules, reusable tools vs. disposable scratch
+│   │   ├── coding-and-safety.md           # Critical files, clean code notes, 30d backup & SHA-256 rollback
+│   │   ├── commands-and-tools.md          # Hook guards, rollback/prune/inspect CLI, artifacts retention & tools
 │   │   └── agents-and-handoff.md          # First-time language setup, clickable menus, /handoff, 3-7d bug reminders
 │   ├── agents/                            # 4-role AI team (10-element schema)
 │   │   ├── lead.md                        # Project manager: plans, clickable approvals, summaries
@@ -107,17 +109,17 @@ Antigravity-Agent-Workflow-with-Auto-Swarm/
 │   │   ├── project-tasks/SKILL.md         # Your project's goals, tasks & pass criteria
 │   │   ├── plan-and-build/SKILL.md        # /vibe, /design, /approve, /code, /simplify, /finalize
 │   │   ├── verify-and-debug/SKILL.md      # /test, /debug, /audit, safety breaker, /compound
-│   │   └── workflow-ops/SKILL.md          # Fast startup memory, 15 checkpoints, /compact, /handoff
-│   ├── hooks.json                         # Automatic safety hooks (startup, pre-edit, post-edit, opt-in stop)
+│   │   └── workflow-ops/SKILL.md          # Fast startup memory, 15 checkpoints, /handoff, rollback/prune/inspect
+│   ├── hooks.json                         # Automatic safety hooks (startup, pre-edit/cmd, post-edit, opt-in stop)
 │   ├── scripts/                           # Zero-dependency Python 3.10+ helper scripts
-│   │   ├── workflow_hooks.py              # Automatic startup language check, checkpoints, bug alerts & backup guard
-│   │   ├── workflow_ops.py                # set-language, backup, diff, log-turn, handoff, check-placeholders
+│   │   ├── workflow_hooks.py              # Startup checks + PreToolUse guards (backup, Git safety, protect artifacts/)
+│   │   ├── workflow_ops.py                # set-language, backup, diff, rollback, prune, inspect, log-turn, handoff, check-placeholders
 │   │   ├── verify_workflow.py             # Automated health checker for all workflow files
 │   │   └── test_workflow_ops_and_hooks.py # Built-in self-test suite
 │   ├── workflows/                         # Optional parallel multi-file analysis script (run_workflow)
 │   ├── templates/                         # Optional MCP server & scheduled automation examples
 │   └── ck/                                # Rolling 15 memory snapshots (context.json, CONTEXT.md, history/)
-└── artifacts/                             # Organized records (Conversations, blueprints, diffs, reviews, comments, tools, scratch)
+└── artifacts/                             # User-managed reference records (never auto-deleted: Conversations, blueprints, diffs, reviews, comments, tools)
 ```
 
 ### Contributing
@@ -157,7 +159,7 @@ This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**
 
 - **เลือกภาษาตั้งแต่เปิดใช้งานครั้งแรก (ไม่ต้องแก้ไฟล์เอง):** เมื่อเปิดแชตครั้งแรก AI จะเด้งเมนูคลิกให้เลือกภาษาที่อยากใช้คุยและบันทึกเอกสาร (เช่น ภาษาไทย, English, ญี่ปุ่น, จีน หรือภาษาอื่น) โดยคงกติกาเบื้องหลังเป็นอังกฤษเพื่อประหยัดความจำ AI แต่คุยกับคุณด้วยภาษาธรรมดาที่อ่านเข้าใจง่าย
 - **คลิกเลือกได้ ไม่ต้องนั่งจำหรือพิมพ์คำสั่งเอง:** มีเมนูคลิกให้เลือก (`ask_question`) ครบทั้งตอนเลือกภาษาครั้งแรก, ตอนอนุมัติแผน (`/approve`), ตอนแชตยาวแล้วต้องเลือกระหว่าง `/handoff` กับ `/compact`, และตอนที่ AI แนะนำคำสั่งอื่นๆ ที่เหมาะกับงาน
-- **วางแผนก่อน สำรองไฟล์ก่อน และขออนุมัติก่อนแก้ทุกครั้ง:** ก่อนแตะไฟล์สำคัญ AI จะอธิบายแผนแบบเข้าใจง่าย เช็กว่ามีจุดขัดแย้งหรือไม่ ให้คุณคลิกอนุมัติ และเซฟไฟล์สำรอง (`Backup`) อัตโนมัติเพื่อให้ย้อนกลับได้เสมอ
+- **วางแผนก่อน สำรองไฟล์ ป้องกันคำสั่งอันตราย และย้อนกลับได้จริง:** ก่อนแตะไฟล์สำคัญ AI จะอธิบายแผนแบบเข้าใจง่าย เช็กจุดขัดแย้ง ให้คุณคลิกอนุมัติ และเซฟไฟล์สำรอง (`Backup`) อัตโนมัติ (เก็บย้อนหลังสูงสุด **30 วัน**) พร้อมฮุคบล็อกการสร้าง Git Branch โดยพลการ, คำสั่ง Git ล้างงานถาวร และคำสั่งลบไฟล์ใน `artifacts/` อัตโนมัติ รวมถึงมีคำสั่ง `rollback`, `prune`, และ `inspect` ให้ตรวจและกู้คืนงานได้ครบวงจร
 - **แบ่งทีม AI กะทัดรัด `4` ตำแหน่งชัดเจน:**
   - `@lead` — **หัวหน้างาน:** รับโจทย์ วางแผน เสนอเมนูให้อนุมัติ และสรุปผลการทำงาน
   - `@builder` — **ช่างลงมือทำ:** สำรองไฟล์และแก้ไขเฉพาะส่วนที่คุณอนุมัติแล้วเท่านั้น
@@ -176,9 +178,11 @@ This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**
 | อยากดูรายละเอียดเชิงลึกครบทุกไฟล์ | `/more-detail` | แสดงชื่อไฟล์ บรรทัด โค้ด และผลคำสั่งแบบละเอียด |
 | เจอปัญหา/บั๊ก อยากหาต้นตอจริง | `/debug <อาการที่พบ>` | ไล่สืบหาสาเหตุจริงเป็นขั้นเป็นตอน แทนการเดาสุ่ม |
 | แชตเริ่มยาว อยากย้ายไปหน้าต่างใหม่สะอาดๆ | `/handoff` *(คลิกเลือกจากเมนูได้)* | สร้างสรุปส่งมอบงาน + ข้อความพร้อมวางในหน้าต่างแชตใหม่ทันที |
-| แชตเริ่มยาว แต่อยากทำต่อในหน้าต่างเดิม | `/compact` *(พิมพ์ในช่องแชต)* | สั่งให้แอป Antigravity บีบอัดประวัติเก่าในหน้าต่างนี้ |
+| แชตเริ่มยาว แต่อยากทำต่อในหน้าต่างเดิม | `/compact` *(พิมพ์แล้วกด `Enter`)* | สั่งให้แอป Antigravity บีบอัดประวัติเก่าในหน้าต่างนี้ |
+| อยากย้อนไฟล์กลับ หรือล้าง Backup เก่าเกิน 30 วัน | `workflow_ops.py rollback` / `prune` | แสดงตัวอย่างก่อน (`dry-run`) แล้วค่อยใส่ `--apply` เพื่อกู้คืน (`SHA-256`) หรือล้าง Backup เก่า |
+| ตรวจสุขภาพเวิร์กโฟลว์และชุดทดสอบในคำสั่งเดียว | `workflow_ops.py inspect --mode quick` | รันตรวจโครงสร้าง + เทสต์ตัวเอง (+ สคริปต์เสริมใน `artifacts/tools/`) |
 
-*(หมายเหตุ: คำสั่งของเวิร์กโฟลว์ เช่น `/handoff` หรือ `/vibe` คลิกจากเมนูแล้ว AI รันต่อให้ทันที ส่วนคำสั่งหลักของแอป Antigravity เช่น `/compact` หรือ `/plan` ผู้ใช้พิมพ์ลงในช่องแชตโดยตรงครับ)*
+*(หมายเหตุ: คำสั่งของเวิร์กโฟลว์ เช่น `/handoff` หรือ `/vibe` คลิกจากเมนูแล้ว AI รันต่อให้ทันที ส่วนคำสั่งหลักของแอป Antigravity เช่น `/compact` หรือ `/plan` ผู้ใช้พิมพ์ลงในช่องแชตแล้วกดปุ่ม `Enter` ด้วยตนเองครับ)*
 
 ### เริ่มต้นใช้งานใน 3 นาที (Quick Start)
 

@@ -24,10 +24,11 @@
 | **Skill** | คู่มือขั้นตอนการทำงานย่อยที่ AI จะเปิดอ่านเฉพาะตอนต้องใช้จริง เพื่อไม่ให้กินความจำแชต |
 | **Hook (ฮุค)** | ยามเฝ้าอัตโนมัติที่ทำงานเบื้องหลังตามจังหวะสำคัญ (ตอนเปิดแชต, ก่อนแก้ไฟล์, หลังแก้ไฟล์) เพื่อคอยเตือนและกันพลาด |
 | **Checkpoint** | จุดเซฟความคืบหน้าสั้นๆ ที่บันทึกให้อัตโนมัติ (เก็บย้อนหลัง `15` ก้าว) เพื่อให้แชตใหม่จำงานต่อได้ทันที |
-| **Pre-Action Backup** | การก๊อปปี้ไฟล์ต้นฉบับเก็บไว้ในโฟลเดอร์ `backup/` ก่อน AI จะลงมือแก้ เพื่อให้ย้อนกลับได้เสมอ |
+| **Pre-Action Backup (เก็บสูงสุด `30` วัน)** | การก๊อปปี้ไฟล์ต้นฉบับเก็บไว้ในโฟลเดอร์ `backup/` ก่อน AI จะลงมือแก้ (ระบบลบไฟล์สำรองเก่าเกิน `30` วันอัตโนมัติ แต่ **ไม่เคยลบไฟล์ใน `artifacts/` อัตโนมัติ**) |
+| **`rollback` / `prune` / `inspect`** | คำสั่งเสริมใน `workflow_ops.py`: `rollback` ย้อนไฟล์กลับพร้อมตรวจ `SHA-256` (แสดงตัวอย่างก่อนเสมอ), `prune` ล้าง `backup/` เกิน 30 วัน, และ `inspect` รันด่านตรวจสุขภาพครบชุดในคำสั่งเดียว |
 | **Diff (ไฟล์ `.diff`)** | รายงานเปรียบเทียบก่อนแก้–หลังแก้ ที่แสดงเฉพาะบรรทัดที่เปลี่ยนจริง |
 | **Placeholder (`{{แบบนี้}}`)** | ช่องว่างสำหรับกรอกข้อมูลเฉพาะของโปรเจกต์คุณ เช่น ชื่อโปรเจกต์ โฟลเดอร์งาน หรือคำสั่งรัน |
-| **`/handoff` เทียบกับ `/compact`** | 2 วิธีจัดการเมื่อคุยกันยาว: **`/handoff`** ห่อสรุปงานไปเริ่มหน้าต่างแชตใหม่สะอาดๆ ส่วน **`/compact`** ย่อข้อความเก่าเพื่อคุยต่อในหน้าต่างเดิม |
+| **`/handoff` เทียบกับ `/compact`** | 2 วิธีจัดการเมื่อคุยกันยาว: **`/handoff`** ห่อสรุปงานไปเริ่มหน้าต่างแชตใหม่สะอาดๆ ส่วน **`/compact`** เป็นคำสั่งระดับแอป (พิมพ์ `/compact` แล้วกดปุ่ม `Enter`) เพื่อย่อข้อความเก่าในหน้าต่างเดิม |
 
 ### โครงสร้างการทำงาน 6 ชั้น
 
@@ -46,7 +47,7 @@
 |---|---|---|
 | เพดาน `AGENTS.md` `24,000` bytes และการค้นหาไฟล์กฎ | **แอป Antigravity (อัตโนมัติ)** | หากเกิน 24 KB ระบบจะตัดท้ายออก และแอปจะเดินหา `AGENTS.md` ขึ้นไปจนถึงโฟลเดอร์บนสุดของ Workspace |
 | `SessionStart` เช็กภาษา, ความจำ และเตือนบั๊กค้าง (`hooks.json`) | **สคริปต์ฮุค (อัตโนมัติ)** | รัน `scripts/workflow_hooks.py session-start` (ทำงานจากโฟลเดอร์ `.agents/`) เพื่อตรวจว่ายังไม่ได้เลือกภาษาหรือไม่, โหลดจุดเซฟ/Handoff ล่าสุด, และเตือนบั๊กที่ค้างมา `3–7` วัน |
-| `PreToolUse` บังคับ Backup และกันคำสั่งอันตราย | **สคริปต์ฮุค (อัตโนมัติ)** | บล็อก `edit_file`/`write_file` ทันทีถ้ายังไม่มี Backup ของวันนั้น และบล็อกคำสั่งเทอร์มินัลที่ตรงกับรายการต้องห้าม |
+| `PreToolUse` บังคับ Backup, กัน Git อันตราย และปกป้อง `artifacts/` | **สคริปต์ฮุค (อัตโนมัติ)** | บล็อก `edit_file`/`write_file` ถ้ายังไม่มี Backup ของวันนั้น, บล็อกการสร้าง Git Branch โดยพลการ (`checkout -b`, `switch -c`, `branch <name>`), บล็อกคำสั่ง Git ทำลายล้าง (`reset --hard`, `clean -f`, `checkout -- .`), บล็อกคำสั่งลบไฟล์ใน `artifacts/` อัตโนมัติ และตรวจรูปแบบคำสั่งต้องห้ามเพิ่มเติม |
 | `PostToolUse` ตรวจสุขภาพไฟล์เวิร์กโฟลว์ | **สคริปต์ฮุค (อัตโนมัติ)** | รัน `verify_workflow.audit_workspace()` หลังแก้ไฟล์เวิร์กโฟลว์ แล้วจดหรือเคลียร์ไฟล์เตือน `.agents/ck/last_alert.log` |
 | `Stop` ด่านเตือนก่อนจบงาน (`alert-stop-gate`, เปิดเลือกได้) | **สคริปต์ฮุค (อัตโนมัติเมื่อเปิดใช้)** | ปิดไว้เป็นค่าเริ่มต้น (`"enabled": false`) และมีตัวกันวนลูป (`continuationActive`) |
 | `verify_workflow.py` และ `test_workflow_ops_and_hooks.py` | **คำสั่งตรวจ (อัตโนมัติ)** | คืนค่าชัดเจน `Exit 0` (ผ่าน) หรือ `Exit 1` (มีจุดต้องแก้) |
@@ -69,7 +70,7 @@
    - **Tier 0 ในแชตเดียว:** งานแก้เล็กๆ 1–2 บรรทัด หรือถามตอบสั้น ($\le 3$ reads)
    - **Tier 1 ผู้ช่วยเดี่ยว (`invoke_subagent`):** งานเฉพาะทาง (`@researcher`, `@builder`, `@verifier`) หรือแก้ `1–8` ไฟล์
    - **Tier 2 ทีมช่วยกันทำ (`swarm` / `run_workflow`):** งานแก้ `>= 9` ไฟล์ หรือแยก `>= 2` สายอิสระ (เรียงลำดับโควตา Pool C Claude/GPT จนหมด `0%` → Pool B `gemini-4-argon-*` → Pool A `gemini-4-neon-*` และหยุด Auto-Swarm หากโควตาสำรองต่ำกว่า `20%`) หากในเครื่องมีไฟล์แก้ค้างที่ยังไม่ Commit จะใช้ `workspace:"inherit"` คู่กับการแบ่งไฟล์ไม่ซ้อนทับเพื่อกันงานค้างหาย
-6. **โค้ดสะอาด กันพลาด และเรียนรู้ถาวร:** สำรองไฟล์ + สร้าง `.diff` ได้แม้ไม่มี Git, แยก `@verifier` อ่านอย่างเดียว, เมื่อ AI ทำพลาดจะเสนอเพิ่มกฎป้องกันและขอ `/approve` (Self-Mistake Governance), กฎ Zero In-Code Comments (ย้ายโน้ตไป `artifacts/comments/`), แยก `artifacts/tools/` (เครื่องมือใช้ซ้ำ) กับ `artifacts/scratch/` (ไฟล์ใช้แล้วทิ้ง), เตือนบั๊กค้าง `3–7` วัน, ค้านด้วยหลักฐาน 3 ส่วน, ท้าทายสมมติฐานเมื่อพลาด 2 รอบ ($N=2$), หยุดเมื่อพลาดครบ 3 รอบ ($N \ge 3$), และแปลงบทเรียนเป็นเกราะป้องกันถาวร (`/compound`)
+6. **โค้ดสะอาด จัดเก็บปลอดภัย และเรียนรู้ถาวร:** สำรองไฟล์ (ลบของเก่าเกิน `30` วันอัตโนมัติ) + คำสั่ง `rollback` ตรวจ `SHA-256` + สร้าง `.diff` ได้แม้ไม่มี Git + คำสั่ง `inspect` ตรวจครบชุด; เอกสารใน `artifacts/` เป็นคลังอ้างอิงที่ผู้ใช้จัดการเอง (**ห้ามลบอัตโนมัติ** ป้องกันด้วยฮุค `PreToolUse` — หากพบเอกสารขัดแย้งกับระบบปัจจุบัน AI จะแจ้งเตือนพร้อมคำแนะนำ); สคริปต์ชั่วคราวใช้แล้วทิ้งให้เก็บในโฟลเดอร์ `scratch/` ประจำแชตของ Antigravity (ไม่เขียนลง `artifacts/scratch/` ในโปรเจกต์) ส่วนเครื่องมือใช้ซ้ำเก็บใน `artifacts/tools/`; แยก `@verifier` อ่านอย่างเดียว, Self-Mistake Governance, กฎ Zero In-Code Comments (`artifacts/comments/`), เตือนบั๊กค้าง `3–7` วัน, ค้านด้วยหลักฐาน 3 ส่วน, ท้าทายสมมติฐานเมื่อพลาด 2 รอบ ($N=2$), หยุดเมื่อพลาดครบ 3 รอบ ($N \ge 3$), และ `/compound`
 7. **เทมเพลตเสริมพร้อมใช้:** สคริปต์กระจายงานขนาน ([project_fanout.py](./.agents/workflows/project_fanout.py) + [workflow.json](./.agents/workflows/workflow.json)), เทมเพลต MCP ([mcp_config.example.json](./.agents/templates/mcp_config.example.json)), และเทมเพลตตั้งเวลาทำงานอัตโนมัติ ([sidecar.schedule.example.json](./.agents/templates/sidecar.schedule.example.json))
 
 ---
@@ -88,8 +89,10 @@
 | เจอข้อผิดพลาด อยากหาต้นตอจริง | `/debug <ปัญหา>` | พิมพ์ในแชต หรือคลิกเมื่อระบบเสนอ |
 | สั่งทดสอบจริง หรือตรวจความเรียบร้อยของงาน | `/test` หรือ `/audit` | พิมพ์ในแชต หรือคลิกเมื่อระบบเสนอ |
 | แชตยาวแล้ว อยากย้ายไปหน้าต่างใหม่ | `/handoff` | คลิก **`/handoff`** ในเมนู (หรือพิมพ์ `/handoff`) |
-| แชตยาวแล้ว แต่อยากย่อประวัติทำต่อหน้าต่างเดิม | `/compact` | พิมพ์ `/compact` ลงในช่องแชตโดยตรง |
-| ให้ AI ช่วยถามทีละข้อเพื่อเคลียร์ไอเดีย | `/grill-me` | พิมพ์ `/grill-me` ลงในช่องแชตโดยตรง |
+| แชตยาวแล้ว แต่อยากย่อประวัติทำต่อหน้าต่างเดิม | `/compact` | พิมพ์ `/compact` ลงในช่องแชตแล้วกดปุ่ม `Enter` |
+| ย้อนไฟล์กลับจาก Backup หรือล้าง Backup เก่าเกิน 30 วัน | `workflow_ops.py rollback` / `prune` | แสดงตัวอย่างก่อน (`dry-run`) แล้วค่อยใส่ `--apply` |
+| ตรวจสุขภาพเวิร์กโฟลว์และเทสต์ครบชุดในคำสั่งเดียว | `workflow_ops.py inspect --mode quick` | รันตรวจโครงสร้าง + เทสต์ตัวเอง (+ `--tool` ที่ระบุ) |
+| ให้ AI ช่วยถามทีละข้อเพื่อเคลียร์ไอเดีย | `/grill-me` | พิมพ์ `/grill-me` ลงในช่องแชตแล้วกดปุ่ม `Enter` |
 
 ### A. คำสั่งหลักของแอป Antigravity (Native Slash Commands)
 *(พิมพ์ตรงในช่องแชตของ Antigravity — เอเจนต์สั่งรันแทนระดับ UI ไม่ได้)*
@@ -146,8 +149,11 @@
 | `python .agents/scripts/workflow_ops.py set-language --lang "<Language>"` | ตั้งค่าภาษาคุยและ `artifacts/` ครบทุกไฟล์เวิร์กโฟลว์ (สำรองไฟล์ให้อัตโนมัติ) |
 | `python .agents/scripts/workflow_ops.py check-placeholders` | แสดงรายการช่องว่าง `{{PLACEHOLDER}}` ที่ยังไม่ได้เติมพร้อมไฟล์และเลขบรรทัด |
 | `python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found` | สแกนช่องว่างพร้อมคืน `Exit 1` หากยังเติมไม่ครบ |
-| `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | สำรองไฟล์ก่อนแก้ลง `backup/` พร้อมรหัสตรวจสอบ `SHA-256` |
+| `python .agents/scripts/workflow_ops.py backup --topic "<slug>" <files...>` | สำรองไฟล์ก่อนแก้ลง `backup/` พร้อมรหัสตรวจสอบ `SHA-256` (ลบไฟล์สำรองเก่าเกิน `30` วันอัตโนมัติ) |
 | `python .agents/scripts/workflow_ops.py diff --output "artifacts/diffs/YYYY-MM-DD/<slug>.diff"` | สร้างไฟล์ `.diff` เทียบก่อนแก้–หลังแก้ (ใช้งานได้แม้ไม่มี Git) |
+| `python .agents/scripts/workflow_ops.py rollback --backup "<dir>" [--apply]` | แสดงตัวอย่าง (`dry-run`) หรือใส่ `--apply` เพื่อย้อนไฟล์กลับพร้อมตรวจ `SHA-256` และลบไฟล์ใหม่ที่บันทึกเป็น `absent` |
+| `python .agents/scripts/workflow_ops.py prune --keep-days 30 [--apply]` | แสดงตัวอย่าง (`dry-run`) หรือใส่ `--apply` เพื่อลบ `backup/` ที่เก่าเกิน `30` วัน (**ไม่แตะ `artifacts/`**) |
+| `python .agents/scripts/workflow_ops.py inspect --mode quick` | รันด่านตรวจสุขภาพรวม (`quick` / `full` / `tools-only` พร้อม `--tool`, `--fail-fast`, `--json`, `--report`) |
 | `python .agents/scripts/workflow_ops.py log-turn --title "<t>" --summary "<s>"` | บันทึกประวัติประจำวันและอัปเดตจุดเซฟ 15 ก้าว |
 | `python .agents/scripts/workflow_ops.py handoff --objective "<obj>"` | สร้างชุดส่งมอบงานข้ามหน้าต่างแชต (`.agents/ck/HANDOFF.md` + `artifacts/handoffs/`) |
 | `python .agents/scripts/verify_workflow.py` | ตรวจสุขภาพไฟล์กฎ, เอเจนต์, สกิล, ฮุค, ลิงก์ และรหัสอักษร (`Exit 0` = ปกติ) |
