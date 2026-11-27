@@ -1,6 +1,6 @@
 ---
 name: workflow-ops
-description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), new-window session handoff (/handoff), rollback/prune/inspect CLI operations, turn logging, placeholder scanning, and workflow self-auditing."
+description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), new-window session handoff (/handoff), workflow self-audit & refactoring (/refactor-agents), rollback/prune/inspect CLI operations, turn logging, and placeholder scanning."
 ---
 
 # Skill: workflow-ops
@@ -36,7 +36,11 @@ description: "O(1) session rehydration, Rolling 15 Checkpoints (/ck), new-window
 - Write `artifacts/` entries in `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` using relative paths only (`BOM=False`) and update `README.md` for every populated category. Record code notes in `artifacts/comments/YYYY-MM-DD/YYYYMMDD_comment_<topic>.md`, reusable local helpers in `artifacts/tools/` (indexed in `artifacts/tools/README.md`), and temporary one-off scripts in Antigravity's built-in per-session `scratch/` folder (never workspace `artifacts/scratch/`).
 - Apply **7-Test No-Slop**: state concrete *Mechanism*, avoid generic *Portability*, name the *Actor*, keep *One Idea* per bullet, maximize *Density*, put the *Decision-First*, and make next actions *Reader-Actionable*.
 
-## 4. Essential CLI Operations
+## 4. Workflow Self-Audit & Refactoring (`/refactor-agents`)
+- Audit `AGENTS.md`, `.agents/rules/*.md`, `.agents/agents/*.md`, `.agents/skills/*/SKILL.md`, `.agents/hooks.json`, and manuals for conflicts, stale model pools/thresholds, broken links, or duplicated rules without mutating application core code.
+- Keep `AGENTS.md` `<= 24,000` bytes (target `10–18 KB`), every `SKILL.md` `<= 300` lines, 10-element agent YAML schemas valid, and confirm clean verification via `python .agents/scripts/workflow_ops.py inspect --mode quick` (`Exit 0`).
+
+## 5. Essential CLI Operations
 ```bash
 # Set user chat & artifacts language for first-time setup (creates backup automatically)
 python .agents/scripts/workflow_ops.py set-language --lang "<Language>"

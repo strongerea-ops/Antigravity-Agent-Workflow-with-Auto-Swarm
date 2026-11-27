@@ -24,7 +24,7 @@ Even if you are **not a programmer**, you can drop these files into any project 
   - `@builder` — **Maker:** makes the exact edits you approved after saving a backup.
   - `@verifier` — **Quality Checker (Read-Only):** runs real tests and checks the changes without editing your files.
   - `@researcher` — **Helper (Read-Only):** searches files and documentation quickly at low cost.
-- **Smart Scaling & Memory Control:** Simple fixes happen in one step (`Tier 0`), normal tasks use one helper (`Tier 1`), and big multi-file tasks automatically split across a team (`Tier 2` Auto-Swarm) while protecting unsaved local changes. When a chat gets long (`10–12` turns), a clickable menu lets you move cleanly to a fresh window (`/handoff`) or compact the current one (`/compact`).
+- **Smart 3-Tier Scaling & 2-Pool Auto-Swarm Control:** Simple fixes happen in one step (`Tier 0`), normal `1–10` file tasks use one helper (`Tier 1`), and big `>= 11` file or multi-stream tasks automatically split across a team (`Tier 2` Auto-Swarm using **2 Pools**: `Claude and GPT Models` to `0%` first → `Gemini Models` fallback) while protecting unsaved local changes. When a chat gets long (`10–12` turns), a clickable menu lets you move cleanly to a fresh window (`/handoff`) or compact the current one (type `/compact` and press `Enter`).
 - **Works With or Without Git, Zero Extra Installs:** Built-in safety checks, backups, change summaries (`.diff`), and reminder checks for `3–7` day unresolved bugs run on standard Python `3.10+` with **zero extra libraries** to install.
 
 ### What Do You Want to Do? (Quick Cheat Sheet)
@@ -60,10 +60,9 @@ Even if you are **not a programmer**, you can drop these files into any project 
    python .agents/scripts/workflow_ops.py check-placeholders
    ```
    *(On Mac/Linux where `python` is called `python3`, change `python` to `python3` inside [.agents/hooks.json](./.agents/hooks.json) while keeping `scripts/workflow_hooks.py` as-is.)*
-4. **Run the built-in health check (both should finish with `0` errors):**
+4. **Run the unified health check (verifies workflow rules + self-tests with `0` errors):**
    ```bash
-   python .agents/scripts/verify_workflow.py
-   python -m unittest discover -s .agents/scripts -p "test_*.py" -v
+   python .agents/scripts/workflow_ops.py inspect --mode quick
    ```
 5. **Start chatting in Antigravity:** Open your project and type `/vibe <what you want to build>`. Step-by-step beginner explanations are in [MANUAL_EN.md](./MANUAL_EN.md) and [MANUAL_TH.md](./MANUAL_TH.md).
 
@@ -165,7 +164,7 @@ This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**
   - `@builder` — **ช่างลงมือทำ:** สำรองไฟล์และแก้ไขเฉพาะส่วนที่คุณอนุมัติแล้วเท่านั้น
   - `@verifier` — **ผู้ตรวจงาน (อ่านอย่างเดียว):** รันการทดสอบจริงและตรวจเช็กความเรียบร้อยโดยไม่แอบแก้ไฟล์เอง
   - `@researcher` — **ผู้ช่วยค้นหา (อ่านอย่างเดียว):** ช่วยค้นไฟล์และหาข้อมูลอย่างรวดเร็วและประหยัดโควตา
-- **ปรับขนาดทีมและคุมความจำแชตอัตโนมัติ:** งานเล็กแก้จบในแชตเดียว (`Tier 0`), งานทั่วไปใช้ผู้ช่วยเดี่ยว (`Tier 1`), งานใหญ่หลายไฟล์ค่อยกระจายให้ทีมทำพร้อมกัน (`Tier 2` Auto-Swarm) โดยไม่ทำให้งานที่ยังไม่เซฟในเครื่องหาย และเมื่อคุยยาวถึง `10–12` รอบ ระบบจะเปิดเมนูคลิกให้เลือกย้ายไปหน้าต่างใหม่ (`/handoff`) หรือบีบอัดหน้าต่างเดิม (`/compact`)
+- **ปรับขนาดทีม 3 ระดับและคุม Auto-Swarm บน 2 พูลอัตโนมัติ:** งานเล็กแก้จบในแชตเดียว (`Tier 0`), งานทั่วไป `1–10` ไฟล์ใช้ผู้ช่วยเดี่ยว (`Tier 1`), งานใหญ่ `>= 11` ไฟล์หรือแยกหลายสายงานค่อยกระจายให้ทีมทำพร้อมกัน (`Tier 2` Auto-Swarm บน **2 พูล**: `Claude and GPT Models` จนหมด `0%` → `Gemini Models` สำรอง) โดยไม่ทำให้งานที่ยังไม่เซฟในเครื่องหาย และเมื่อคุยยาวถึง `10–12` รอบ ระบบจะเปิดเมนูคลิกให้เลือกย้ายไปหน้าต่างใหม่ (`/handoff`) หรือพิมพ์ `/compact` แล้วกด `Enter` ในหน้าต่างเดิม
 - **ใช้ได้ทั้งแบบมี Git และไม่มี Git โดยไม่ต้องลงโปรแกรมเสริม:** ระบบสำรองไฟล์, สรุปจุดที่เปลี่ยน (`.diff`), ตัวตรวจความสมบูรณ์ และระบบเตือนบั๊กที่ค้างมา `3–7` วัน ทำงานด้วย Python `3.10+` มาตรฐาน ไม่ต้องติดตั้งไลบรารีเพิ่ม
 
 ### อยากทำอะไร → ใช้คำสั่งไหนดี? (ตารางลัดสำหรับมือใหม่)
@@ -201,10 +200,9 @@ This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**
    python .agents/scripts/workflow_ops.py check-placeholders
    ```
    *(บน Mac/Linux ที่ต้องใช้คำสั่ง `python3` ให้แก้ `python` เป็น `python3` ใน [.agents/hooks.json](./.agents/hooks.json) โดยคง `scripts/workflow_hooks.py` ไว้เหมือนเดิม)*
-4. **รันตัวตรวจสุขภาพระบบ (ควรผ่านด้วย `0` ข้อผิดพลาดทั้งคู่):**
+4. **รันตัวตรวจสุขภาพรวม (ตรวจไฟล์เวิร์กโฟลว์และชุดทดสอบทั้งหมดในคำสั่งเดียว ควรผ่าน `0` ข้อผิดพลาด):**
    ```bash
-   python .agents/scripts/verify_workflow.py
-   python -m unittest discover -s .agents/scripts -p "test_*.py" -v
+   python .agents/scripts/workflow_ops.py inspect --mode quick
    ```
 5. **เริ่มใช้งานใน Antigravity ได้เลย:** เปิดโปรเจกต์แล้วพิมพ์ `/vibe <สิ่งที่อยากสร้าง>` — อ่านคู่มือแบบจับมือทำทุกขั้นตอนพร้อมคำศัพท์พื้นฐานได้ที่ [MANUAL_TH.md](./MANUAL_TH.md)
 

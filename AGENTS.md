@@ -75,21 +75,21 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 11. Never fabricate test/audit results — run real commands, report exact commands + exit codes, and disclose `Untested/Unreviewed Scope` honestly.
 12. Never write explanatory notes or comments inside source code — record necessary notes in `artifacts/comments/` (in `{{CHAT_AND_ARTIFACTS_LANGUAGE}}`) instead; inline exceptions are permitted only when strictly necessary and high-importance (`CRITICAL:`/`IMPORTANT:`/`SAFETY:`/`INVARIANT:` or mandatory interpreter/linter/type-checker directives).
 
-## 7. Lean Agent Ecosystem (`4` Agents) & Auto-Effort Model Matrix
-| Tier / Role | File | Primary Tier 2 Auto Swarm *(Pool C: Claude/GPT)* | Tier 1 YAML `model` & Escalation / Fallback |
+## 7. Lean Agent Ecosystem (`4` Agents) & 2-Pool Auto-Effort Model Matrix
+| Tier / Role | File | Primary Swarm *(Claude and GPT Models)* | Fallback Swarm *(Gemini Models)* & Tier 1 YAML `model` |
 |---|---|---|---|
-| **Tier 0: In-line** | *(main chat)* | Main Chat UI Model | 1–2 line fixes / short Q&A ($\le 3$ reads) on warm KV cache |
-| **👑 @lead** | [lead.md](./.agents/agents/lead.md) | `claude-opus-5-5-high` *(or `claude-sonnet-5-5-high`)* | `pro` • Triage, `/approve`, Exclusive Dispatcher, Evidence Closure (Fallback: `gemini-4-argon-high` / `gemini-4-neon-xhigh`) |
-| **🏗️ @builder** | [builder.md](./.agents/agents/builder.md) | `claude-sonnet-5-5-medium` *(complex/core -> `high`)* | `flash` • Backup + Minimal Diff per approved plan + simplify (Fallback: `gemini-4-neon-medium` -> `high` / `hydrogen-medium`) |
-| **🧪 @verifier** | [verifier.md](./.agents/agents/verifier.md) | `gpt-oss-120b-medium` *(RCA/critical diff -> `claude-sonnet-5-5-high`)* | `flash` • Read-Only Dynamic QA + Static Diff Audit (Fallback: `gemini-4-neon-low` -> `high` / `hydrogen-low`) |
-| **🔎 @researcher** | [researcher.md](./.agents/agents/researcher.md) | `gpt-oss-120b-medium` *(deep cross-module -> `claude-sonnet-5-5-low`)* | `flash_lite` • Read-Only Codebase & Web Exploration (Fallback: `gemini-4-neon-low` / `hydrogen-low`) |
+| **Tier 0: In-line** | *(main chat)* | Main Chat UI Model *(default `High`; `Extra High` for heavy analysis)* | Main Chat UI Model • 1–2 line fixes / short Q&A ($\le 3$ reads) on warm KV cache |
+| **👑 @lead** | [lead.md](./.agents/agents/lead.md) | `claude-opus-5-5-high` *(or `claude-sonnet-5-5-high`)* | `gemini-pro-orchestrator-neon` / `gemini-4-neon-xhigh` • Tier 1 `pro` • Triage, `/approve`, Exclusive Dispatcher, Evidence Closure |
+| **🏗️ @builder** | [builder.md](./.agents/agents/builder.md) | `claude-sonnet-5-5-medium` *(complex/core -> `high`)* | `gemini-4-neon-medium` -> `high` / `gemini-4-hydrogen-medium` • Tier 1 `flash` • Backup + Minimal Diff + `/simplify` |
+| **🧪 @verifier** | [verifier.md](./.agents/agents/verifier.md) | `gpt-oss-120b-medium` *(RCA/critical diff -> `claude-sonnet-5-5-high`; high-risk audit -> `claude-opus-5-5-high`)* | `gemini-4-neon-low` -> `high` / `gemini-4-hydrogen-low` • Tier 1 `flash` • Read-Only Dynamic QA + Static Diff Audit |
+| **🔎 @researcher** | [researcher.md](./.agents/agents/researcher.md) | `gpt-oss-120b-medium` *(deep cross-module -> `claude-sonnet-5-5-low`)* | `gemini-4-neon-low` / `gemini-4-hydrogen-low` • Tier 1 `flash_lite` • Read-Only Codebase & Web Exploration |
 
-> **Quota Pools, Auto Effort & Runtime Scope:**
-> - **Pool Priority & Auto Effort:** Prefer **Pool C (Claude/GPT)** for Tier 2 `swarm` (`claude-opus-5-5-{low,medium,high}`, `claude-sonnet-5-5-{low,medium,high}`, `gpt-oss-120b-medium`) and **exhaust Pool C (`0%`) first** before falling back to **Pool B** (`gemini-4-argon-{low,medium,high}`) and **Pool A** (preferring **Gemini 4 Neon**: `gemini-4-neon-{low,medium,high,xhigh}` ahead of `gemini-4-hydrogen-*` and `gemini-3.8-flash-*`). Apply **Auto Effort** per role/task complexity on `swarm` `add` or `model` transitions; halt Auto-Swarm if active fallback pool quota `< 20%`.
-> - **Schema & Runtime:** Main chat model is UI Dropdown only; `swarm` uses exact Model+Effort IDs while `invoke_subagent` YAML uses `inherit`/`flash_lite`/`flash`/`pro` (10-element agent schema in [.agents/rules/agents-and-handoff.md](./.agents/rules/agents-and-handoff.md)).
+> **2-Pool Quota Priority, Auto Effort & Runtime Scope:**
+> - **2 Pools Only (Argon Retired):** For Tier 2 `swarm`, prefer **`Claude and GPT Models`** (`claude-opus-5-5-{low,medium,high}`, `claude-sonnet-5-5-{low,medium,high}`, `gpt-oss-120b-medium`) and **exhaust this primary pool to `0%` first** before falling back to **`Gemini Models`** (preferring `gemini-pro-orchestrator-neon` and `gemini-4-neon-{low,medium,high,xhigh}` ahead of `gemini-4-hydrogen-*`, `gemini-4-carbon-*`, and `gemini-3.8-flash-*`). Apply **Auto Effort** (`low`/`medium`/`high`/`xhigh`) per role/task complexity on `swarm` `add` or `model` transitions; halt Auto-Swarm if fallback pool quota `< 20%`.
+> - **Schema & Runtime:** Main chat model and effort are controlled via the Antigravity UI Dropdown only (recommend `High` default, `Extra High` temporarily for heavy analysis); `swarm` uses exact Model+Effort IDs while `invoke_subagent` YAML uses `inherit`/`flash_lite`/`flash`/`pro` (10-element agent schema in [.agents/rules/agents-and-handoff.md](./.agents/rules/agents-and-handoff.md)).
 
 ## 8. Modular Skills Directory (`4` Skills)
-*(`/vibe`, `/design`, `/approve`, `/code`, `/simplify`, `/test`, `/debug`, `/audit`, `/finalize`, `/compound`, `/ck`, `/handoff`, `/concept`, `/no-code`, `/no-detail`, `/more-detail` are Prompt Action Triggers in chat.)*
+*(`/vibe`, `/design`, `/approve`, `/code`, `/simplify`, `/test`, `/debug`, `/audit`, `/finalize`, `/compound`, `/ck`, `/handoff`, `/refactor-agents`, `/concept`, `/no-code`, `/no-detail`, `/more-detail` are Prompt Action Triggers in chat.)*
 - **Project Tasks & Objectives:** [project-tasks](./.agents/skills/project-tasks/SKILL.md)
 - **Plan, Build & Simplify:** [plan-and-build](./.agents/skills/plan-and-build/SKILL.md)
 - **Verify, RCA & Compound Learning:** [verify-and-debug](./.agents/skills/verify-and-debug/SKILL.md)
@@ -110,5 +110,5 @@ python -m unittest discover -s .agents/scripts -p "test_*.py" -v
 11. **Senior Dev & Compound Learning:** Minimal Diff `-U1`, 100% Callers, Never Cut List, and evaluate `/compound` (`Test/Lint -> Rule -> Solution Doc`) after closing non-trivial bugs.
 12. **3-Tier Auto Triage Gate (`Tier 0–2` + `run_workflow`):**
     - **Tier 0 In-line:** 1–2 line edits, `<= 3` reads, or concise Q&A on warm cache.
-    - **Tier 1 `invoke_subagent`:** Multi-file research (`@researcher`), long test/lint logs (`@verifier`), or `1–8` file edits (`@builder`).
-    - **Tier 2 `swarm` / `run_workflow`:** `>= 9` modified files (excluding `artifacts/`/`.agents/ck/`) or `>= 2` disjoint workstreams use `swarm` (obeying the Dirty-Tree Rule in `.agents/rules/rules.md`); structured multi-file read/review fan-outs use `run_workflow` (see `.agents/workflows/project_fanout.py`); never edit code before `/approve`.
+    - **Tier 1 `invoke_subagent`:** Multi-file research (`@researcher`), long test/lint logs (`@verifier`), or `1–10` file edits (`@builder`).
+    - **Tier 2 `swarm` / `run_workflow`:** `>= 11` modified files (excluding `artifacts/`/`.agents/ck/`) or `>= 2` clearly disjoint workstreams explicitly invoke `swarm` per [plan-and-build](./.agents/skills/plan-and-build/SKILL.md) (2 pools: exhaust `Claude and GPT Models` to `0%` first -> `Gemini Models` fallback; obey the Dirty-Tree `workspace:"inherit"` Rule in `.agents/rules/rules.md`; never edit code before `/approve`); structured multi-file read/review fan-outs use `run_workflow` (see `.agents/workflows/project_fanout.py`).

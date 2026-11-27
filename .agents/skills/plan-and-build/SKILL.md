@@ -9,8 +9,8 @@ description: "End-to-end planning, approval, implementation, simplification, and
 
 ## 1. Proportional Triage (`/vibe`)
 - **Tier 0 (In-line Fast Path):** 1–2 line low-risk fixes with explicit targets or concise Q&A (`<= 3` reads).
-- **Tier 1 (`invoke_subagent`):** Scoped feature/bug work (`1–8` files) routed through `@researcher`, `@builder`, and `@verifier`.
-- **Tier 2 (`swarm` / `run_workflow`):** `>= 9` modified files or `>= 2` disjoint workstreams use `swarm` (obeying the Dirty-Tree Rule in `rules.md`: `workspace:"inherit"` on dirty trees, `workspace:"share"`/`"branch"` only on clean committed trees). Structured multi-file analysis uses `run_workflow` (`.agents/workflows/project_fanout.py`).
+- **Tier 1 (`invoke_subagent`):** Scoped feature/bug work (`1–10` files) routed through `@researcher`, `@builder`, and `@verifier`.
+- **Tier 2 (`swarm` / `run_workflow`):** `>= 11` modified files (excluding `artifacts/`/`.agents/ck/`) or `>= 2` clearly disjoint workstreams explicitly invoke `swarm` per §4 below (obeying the Dirty-Tree Rule in `rules.md`: `workspace:"inherit"` on dirty trees, `workspace:"share"`/`"branch"` only on clean committed trees). Structured multi-file analysis uses `run_workflow` (`.agents/workflows/project_fanout.py`).
 
 ## 2. Design & Blueprint Phase (`/design`)
 For new features, architectural changes, or multi-file tasks, write a blueprint under `artifacts/blueprints/YYYY-MM-DD/YYYYMMDD_blueprint_<topic>.md` containing:
@@ -29,9 +29,10 @@ Before editing source code or workflow architecture, present:
 
 ## 4. Build & Simplify (`/code`, `/simplify`)
 1. **Pre-Action Backup:** Run `python .agents/scripts/workflow_ops.py backup --topic "<topic>" <files...>` before modifying protected files.
-2. **Baseline & Idempotent Re-entry:** Check `git status --short` (or backup manifest in non-Git repos); never revert pre-existing user changes; skip units already satisfied.
-3. **Minimal Diff Implementation:** Smallest Complete Change, 100% caller updates, root-cause fixes, zero mock data on owned code, Zero In-Code Comments (`artifacts/comments/`), `BOM=False`, relative paths only.
-4. **Post-Build Simplification (`/simplify`):** Pass changes through `5` lenses — **Reuse**, **Quality**, **Efficiency**, **Test Value**, and **Zero In-Code Comments** (relocate any necessary notes to `artifacts/comments/YYYY-MM-DD/YYYYMMDD_comment_<topic>.md`; keep inline comments only for high-importance safety/invariant markers or mandatory directives) — without weakening validations or tests.
+2. **Tier 2 Auto-Swarm Dispatch (Post-`/approve` Only):** When an approved plan modifies `>= 11` files (excluding `artifacts/`/`.agents/ck/`) or spans `>= 2` clearly disjoint workstreams, explicitly invoke `swarm` per `AGENTS.md` §7 & §9.12 (2 pools: exhaust `Claude and GPT Models` to `0%` first, then fall back to `Gemini Models` preferring `gemini-pro-orchestrator-neon` / `gemini-4-neon-*`; apply Auto Effort per role; halt Auto-Swarm if fallback pool `< 20%`; use `workspace:"inherit"` with disjoint file ownership on dirty working trees). Never edit code before `/approve`.
+3. **Baseline & Idempotent Re-entry:** Check `git status --short` (or backup manifest in non-Git repos); never revert pre-existing user changes; skip units already satisfied.
+4. **Minimal Diff Implementation:** Smallest Complete Change, 100% caller updates, root-cause fixes, zero mock data on owned code, Zero In-Code Comments (`artifacts/comments/`), `BOM=False`, relative paths only.
+5. **Post-Build Simplification (`/simplify`):** Pass changes through `5` lenses — **Reuse**, **Quality**, **Efficiency**, **Test Value**, and **Zero In-Code Comments** (relocate any necessary notes to `artifacts/comments/YYYY-MM-DD/YYYYMMDD_comment_<topic>.md`; keep inline comments only for high-importance safety/invariant markers or mandatory directives) — without weakening validations or tests.
 
 ## 5. Post-Approval Auto-Fix & Closure (`/finalize`)
 - **Post-Approval Auto-Fix:** If `@verifier` reports a defect strictly inside approved scope with zero Conflict/Redundancy, `@lead` may dispatch `@builder` again without re-asking `/approve` (respecting Circuit Breaker $N \ge 3$).

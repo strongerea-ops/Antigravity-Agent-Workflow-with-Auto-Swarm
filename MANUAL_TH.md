@@ -52,7 +52,7 @@
 | `Stop` ด่านเตือนก่อนจบงาน (`alert-stop-gate`, เปิดเลือกได้) | **สคริปต์ฮุค (อัตโนมัติเมื่อเปิดใช้)** | ปิดไว้เป็นค่าเริ่มต้น (`"enabled": false`) และมีตัวกันวนลูป (`continuationActive`) |
 | `verify_workflow.py` และ `test_workflow_ops_and_hooks.py` | **คำสั่งตรวจ (อัตโนมัติ)** | คืนค่าชัดเจน `Exit 0` (ผ่าน) หรือ `Exit 1` (มีจุดต้องแก้) |
 | เมนูคลิก `/approve`, การตอบภาษาง่าย, หยุดเมื่อพลาดครบ 3 รอบ ($N \ge 3$) | **กติการะดับ Prompt** | กำกับผ่าน `AGENTS.md` และบทบาท AI โดยมีคุณคอยกดอนุมัติร่วมด้วย |
-| การเปลี่ยนโมเดลแชตหลัก, เปิดหน้าต่างแชตใหม่ และพิมพ์คำสั่งระบบ (`/compact`, `/plan` ฯลฯ) | **ควบคุมผ่านหน้าจอแอปเท่านั้น** | AI กดปุ่มหน้าจอแอปหรือสั่งรันคำสั่งระบบของ Antigravity แทนคุณไม่ได้ — ระบบจะเปิดเมนูคลิกให้คุณเลือกก่อน แล้วรันคำสั่งเวิร์กโฟลว์ให้ทันที หรือบอกชัดเจนเมื่อถึงจังหวะที่คุณต้องพิมพ์คำสั่งระบบหรือกดเปิดแชตใหม่ |
+| การเปลี่ยนโมเดล/ระดับ Effort แชตหลัก, เปิดหน้าต่างแชตใหม่ และพิมพ์คำสั่งระบบ (`/compact`, `/plan` ฯลฯ) | **ควบคุมผ่านหน้าจอแอปเท่านั้น** | AI กดปุ่มหน้าจอแอป, ปรับระดับ Effort แชตหลัก (แนะนำตั้งค่าเริ่มต้นที่ **`High`** และสลับเป็น **`Extra High`** ชั่วคราวเฉพาะงานวิเคราะห์หนัก), หรือรันคำสั่งระบบของ Antigravity แทนคุณไม่ได้ — ระบบจะเปิดเมนูคลิกให้ยืนยันก่อน รันคำสั่งเวิร์กโฟลว์ให้ทันที และบอกชัดเมื่อต้องพิมพ์คำสั่งระบบ (เช่น `/compact` แล้วกดปุ่ม `Enter`) หรือกดเปิดแชตใหม่ |
 
 ---
 
@@ -65,11 +65,11 @@
    - **ตอนแชตเริ่มยาว (`10–12` รอบ):** เลือกได้ระหว่าง **`/handoff`** (สร้างแพ็กเกจย้ายไปหน้าต่างใหม่ทันที), **`/compact`** (ย่อประวัติเพื่อคุยต่อหน้าต่างเดิม), หรือทำต่อยังไม่บีบอัด
    - **ตอน AI แนะนำคำสั่งอื่นๆ ที่เหมาะกับงาน** (เช่น `/vibe`, `/design`, `/test`, `/debug`, `/more-detail` หรือคำสั่งระบบอย่าง `/plan`, `/grill-me`) โดยบอกชัดว่าคำสั่งไหนคลิกแล้วรันต่อให้ทันที และคำสั่งไหนต้องพิมพ์ลงช่องแชตเอง
 3. **ตอบสั้นกระชับเป็นค่าเริ่มต้น ขยายละเอียดเฉพาะตอนจำเป็น:** คำถามทั่วไปจะได้คำตอบภาษาเข้าใจง่าย `3–5` ข้อ (`no-code / no-detail`) ไม่มีโค้ดรกตา และจะขยายรายละเอียดอัตโนมัติตอนวางแผน, แก้ไขไฟล์, หรือเมื่อสั่ง `/more-detail` พร้อมสรุปฟันธง **Action Recommendation Verdict** (ควรทำหรือไม่พร้อมเหตุผล) เฉพาะงานวิเคราะห์/ทดสอบก่อนตัดสินใจ
-4. **ดูแลความจำแชตไม่ให้ล้น (`/compact` + `/handoff` + ฟื้นความจำไว):** โหลดสกิลเฉพาะตอนจำเป็น อ่านไฟล์ใหญ่ทีละช่วง ($\le 300$ บรรทัด) และเมื่อกดเลือก `/handoff` ระบบจะสร้าง `.agents/ck/HANDOFF.md` + เก็บใน `artifacts/handoffs/` + ข้อความพร้อมวางในหน้าต่างใหม่ให้ `SessionStart` รับช่วงต่ออัตโนมัติ
-5. **ปรับขนาดทีมอัตโนมัติ 3 ระดับ + กันงานแก้ค้างหาย:**
-   - **Tier 0 ในแชตเดียว:** งานแก้เล็กๆ 1–2 บรรทัด หรือถามตอบสั้น ($\le 3$ reads)
-   - **Tier 1 ผู้ช่วยเดี่ยว (`invoke_subagent`):** งานเฉพาะทาง (`@researcher`, `@builder`, `@verifier`) หรือแก้ `1–8` ไฟล์
-   - **Tier 2 ทีมช่วยกันทำ (`swarm` / `run_workflow`):** งานแก้ `>= 9` ไฟล์ หรือแยก `>= 2` สายอิสระ (เรียงลำดับโควตา Pool C Claude/GPT จนหมด `0%` → Pool B `gemini-4-argon-*` → Pool A `gemini-4-neon-*` และหยุด Auto-Swarm หากโควตาสำรองต่ำกว่า `20%`) หากในเครื่องมีไฟล์แก้ค้างที่ยังไม่ Commit จะใช้ `workspace:"inherit"` คู่กับการแบ่งไฟล์ไม่ซ้อนทับเพื่อกันงานค้างหาย
+4. **ดูแลความจำแชตไม่ให้ล้น (`/handoff` + คำสั่งระบบ `/compact` + ฟื้นความจำไว):** โหลดสกิลเฉพาะตอนจำเป็น อ่านไฟล์ใหญ่ทีละช่วง ($\le 300$ บรรทัด) และเมื่อกดเลือก `/handoff` ระบบจะสร้าง `.agents/ck/HANDOFF.md` + เก็บใน `artifacts/handoffs/` + ข้อความพร้อมวางในหน้าต่างใหม่ให้ `SessionStart` รับช่วงต่ออัตโนมัติ (หรือเลือกใช้คำสั่งระบบ `/compact` โดยพิมพ์ `/compact` ในช่องแชตแล้วกดปุ่ม `Enter` เพื่อย่อประวัติในหน้าต่างเดิม)
+5. **ปรับขนาดทีมอัตโนมัติ 3 ระดับ + Auto-Swarm 2 พูลที่ปลอดภัย:**
+   - **Tier 0 ในแชตเดียว:** งานแก้เล็กๆ 1–2 บรรทัด หรือถามตอบสั้น ($\le 3$ reads) บนโมเดลหน้าต่างแชตหลัก (แนะนำ Effort `High` เป็นค่าเริ่มต้น และสลับ `Extra High` ชั่วคราวเฉพาะงานวิเคราะห์หนัก)
+   - **Tier 1 ผู้ช่วยเดี่ยว (`invoke_subagent`):** งานเฉพาะทาง (`@researcher`, `@builder`, `@verifier`) หรือแก้ **`1–10` ไฟล์**
+   - **Tier 2 ทีมช่วยกันทำ (`swarm` / `run_workflow`):** งานแก้ **`>= 11` ไฟล์** (ไม่นับ `artifacts/`/`.agents/ck/`) หรือแยก **`>= 2` สายงานอิสระชัดเจน** จะเรียก `swarm` ตามที่กำหนดใน `plan-and-build/SKILL.md` บน **2 พูลโมเดล** (ใช้ **`Claude and GPT Models`** จนหมด `0%` ก่อน → สลับไป **`Gemini Models`** โดยเลือก `gemini-pro-orchestrator-neon` และ `gemini-4-neon-*` ก่อน และหยุด Auto-Swarm หากพูลสำรองเหลือต่ำกว่า `20%`; **ตัดพูล Argon ออกแล้ว**) หากในเครื่องมีไฟล์แก้ค้างที่ยังไม่ Commit จะใช้ `workspace:"inherit"` คู่กับการแบ่งไฟล์ไม่ซ้อนทับเพื่อกันงานค้างหาย และห้ามแก้โค้ดก่อน `/approve` เด็ดขาด
 6. **โค้ดสะอาด จัดเก็บปลอดภัย และเรียนรู้ถาวร:** สำรองไฟล์ (ลบของเก่าเกิน `30` วันอัตโนมัติ) + คำสั่ง `rollback` ตรวจ `SHA-256` + สร้าง `.diff` ได้แม้ไม่มี Git + คำสั่ง `inspect` ตรวจครบชุด; เอกสารใน `artifacts/` เป็นคลังอ้างอิงที่ผู้ใช้จัดการเอง (**ห้ามลบอัตโนมัติ** ป้องกันด้วยฮุค `PreToolUse` — หากพบเอกสารขัดแย้งกับระบบปัจจุบัน AI จะแจ้งเตือนพร้อมคำแนะนำ); สคริปต์ชั่วคราวใช้แล้วทิ้งให้เก็บในโฟลเดอร์ `scratch/` ประจำแชตของ Antigravity (ไม่เขียนลง `artifacts/scratch/` ในโปรเจกต์) ส่วนเครื่องมือใช้ซ้ำเก็บใน `artifacts/tools/`; แยก `@verifier` อ่านอย่างเดียว, Self-Mistake Governance, กฎ Zero In-Code Comments (`artifacts/comments/`), เตือนบั๊กค้าง `3–7` วัน, ค้านด้วยหลักฐาน 3 ส่วน, ท้าทายสมมติฐานเมื่อพลาด 2 รอบ ($N=2$), หยุดเมื่อพลาดครบ 3 รอบ ($N \ge 3$), และ `/compound`
 7. **เทมเพลตเสริมพร้อมใช้:** สคริปต์กระจายงานขนาน ([project_fanout.py](./.agents/workflows/project_fanout.py) + [workflow.json](./.agents/workflows/workflow.json)), เทมเพลต MCP ([mcp_config.example.json](./.agents/templates/mcp_config.example.json)), และเทมเพลตตั้งเวลาทำงานอัตโนมัติ ([sidecar.schedule.example.json](./.agents/templates/sidecar.schedule.example.json))
 
@@ -100,7 +100,7 @@
 | คำสั่ง | หน้าที่แบบเข้าใจง่าย |
 |---|---|
 | `/plan` | ให้ AI วางแผนละเอียดทีละขั้นตอนก่อนลงมือทำ |
-| `/compact` | ย่อประวัติการคุยในหน้าต่างเดิมเพื่อคืนพื้นที่ความจำแชต |
+| `/compact` | พิมพ์ `/compact` ในช่องแชตแล้วกดปุ่ม `Enter` เพื่อย่อประวัติการคุยในหน้าต่างเดิมและคืนพื้นที่ความจำแชต |
 | `/goal` | สั่งงานใหญ่ให้ AI ทำต่อเนื่องจนกว่าจะเสร็จสมบูรณ์ |
 | `/schedule` | ตั้งตัวจับเวลาหรือการแจ้งเตือนซ้ำในเซสชันนี้ |
 | `/automation` | ตัวช่วยสร้างงานตั้งเวลาอัตโนมัติเบื้องหลัง |
@@ -127,19 +127,22 @@
 | `/finalize` | `@lead` (`plan-and-build`) | ตรวจรับตามเกณฑ์ทีละข้อ, สร้าง `.diff`, ประเมิน `/compound` และบันทึกประวัติ |
 | `/compound` | `@lead` (`verify-and-debug`) | แปลงบทเรียนจากบั๊กใหญ่เป็นตัวป้องกันถาวร (`Test/Lint -> Rule -> Solution Doc`) |
 | `/ck` | `@lead` (`workflow-ops`) | บันทึกหรือดูสถานะจุดเซฟ 15 ก้าวใน `.agents/ck/` |
-| `/handoff` | `@lead` (`workflow-ops`) | เสนอผ่านเมนูคลิกคู่กับ `/compact`: สร้าง `.agents/ck/HANDOFF.md`, เก็บใน `artifacts/handoffs/`, ตั้ง `HANDOFF_READY` ให้หน้าต่างใหม่รับช่วงต่อ และแสดงข้อความพร้อมคัดลอกวาง |
+| `/handoff` | `@lead` (`workflow-ops`) | เสนอผ่านเมนูคลิกคู่กับคำสั่งระบบ `/compact` *(พิมพ์ `/compact` แล้วกด `Enter`)*: สร้าง `.agents/ck/HANDOFF.md`, เก็บใน `artifacts/handoffs/`, ตั้ง `HANDOFF_READY` ให้หน้าต่างใหม่รับช่วงต่อ และแสดงข้อความพร้อมคัดลอกวาง |
 | `/concept`, `/no-code`, `/no-detail` | `@lead` (`AGENTS.md` §0) | บังคับตอบสั้น `3–5` ข้อภาษาธรรมดา งดโค้ดและรายชื่อไฟล์ที่ไม่ได้แก้ |
 | `/more-detail` | `@lead` (`AGENTS.md` §0) | ขยายคำตอบเต็มรูปแบบครบทุกไฟล์ บรรทัด โค้ด และผลคำสั่ง |
-| `/refactor-agents` | `@lead` (`workflow-ops`) | ตรวจและปรับปรุงไฟล์ `AGENTS.md` กับ `.agents/` ให้กระชับและผ่านเกณฑ์ |
+| `/refactor-agents` | `@lead` (`workflow-ops`) | ตรวจและปรับปรุงไฟล์ `AGENTS.md` กับ `.agents/` ให้กระชับ ตรงพูล 2 พูล และผ่านเกณฑ์ |
 
-### C. การเรียกบทบาททีม AI (`@role`)
+### C. การเรียกบทบาททีม AI (`@role`) และตารางโมเดล Swarm (`2` พูล)
 
-| บทบาท | โมเดล Tier 1 | แก้ไฟล์ได้ไหม? | สิทธิ์คำสั่ง | เหมาะกับงานแบบใด |
-|---|---|---|---|---|
-| `@lead` | `pro` | ได้ (หัวหน้างาน) | `auto` | วางแผน, เช็กความขัดแย้ง, แสดงเมนูคลิก `/approve`, และสรุปงาน |
-| `@builder` | `flash` | ได้ (เฉพาะที่อนุมัติ) | `auto` | สำรองไฟล์และแก้ไขงานตามแผนอย่างสะอาด |
-| `@verifier` | `flash` | **ไม่ได้ (อ่านอย่างเดียว)** | `sandbox` | รันเทสต์จริง, สืบสวนบั๊ก, และตรวจ Diff โดยไม่แอบแก้ไฟล์ |
-| `@researcher` | `flash_lite` | **ไม่ได้ (อ่านอย่างเดียว)** | `off` | ค้นหาไฟล์, จุดเรียกใช้, และเอกสารอย่างรวดเร็วประหยัดโควตา |
+| บทบาท | พูลหลัก Swarm (`Claude and GPT Models`) | พูลสำรอง Swarm (`Gemini Models`) | โมเดล Tier 1 | แก้ไฟล์ได้ไหม? | สิทธิ์คำสั่ง | เหมาะกับงานแบบใด |
+|---|---|---|---|---|---|---|
+| **Tier 0 (แชตหลัก)** | ใช้โมเดลจากเมนูบนหน้าจอแอป *(ค่าเริ่มต้น `High`; งานวิเคราะห์หนักสลับ `Extra High`)* | ใช้โมเดลจากเมนูบนหน้าจอแอป | — | หัวหน้างาน | — | แก้ `1–2` บรรทัด, อ่าน `<= 3` ไฟล์, ถามตอบ `/concept` |
+| **`@lead`** | `claude-opus-5-5-high` *(หรือ `claude-sonnet-5-5-high`)* | `gemini-pro-orchestrator-neon` / `gemini-4-neon-xhigh` | `pro` | ได้ (หัวหน้างาน) | `auto` | วางแผน, เช็กความขัดแย้ง, แสดงเมนูคลิก `/approve`, และสรุปงาน |
+| **`@builder`** | `claude-sonnet-5-5-medium` *(งานซับซ้อน/ระบบหลัก → `high`)* | `gemini-4-neon-medium` → `high` / `gemini-4-hydrogen-medium` | `flash` | ได้ (เฉพาะที่อนุมัติ) | `auto` | สำรองไฟล์และแก้ไขงานตามแผนอย่างสะอาด + `/simplify` |
+| **`@verifier`** | `gpt-oss-120b-medium` *(สืบสาเหตุลึก/Diff สำคัญ → `claude-sonnet-5-5-high`; ออดิทเสี่ยงสูง → `claude-opus-5-5-high`)* | `gemini-4-neon-low` → `high` / `gemini-4-hydrogen-low` | `flash` | **ไม่ได้ (อ่านอย่างเดียว)** | `sandbox` | รันเทสต์จริง, สืบสวนบั๊ก, และตรวจ Diff โดยไม่แอบแก้ไฟล์ |
+| **`@researcher`** | `gpt-oss-120b-medium` *(งานค้นข้ามหลายโมดูล → `claude-sonnet-5-5-low`)* | `gemini-4-neon-low` / `gemini-4-hydrogen-low` | `flash_lite` | **ไม่ได้ (อ่านอย่างเดียว)** | `off` | ค้นหาไฟล์, จุดเรียกใช้, และเอกสารอย่างรวดเร็วประหยัดโควตา |
+
+*(กฎ 2 พูล Swarm: ใช้ **`Claude and GPT Models`** ให้หมด `0%` ก่อนสลับไป **`Gemini Models`** พร้อมปรับ Auto Effort ตามความซับซ้อน และหยุด Auto-Swarm หากพูลสำรองเหลือ `< 20%`)*
 
 ### D. คำสั่ง Python ช่วยงานที่ติดมากับชุดนี้
 *(รันจากโฟลเดอร์หลักของโปรเจกต์; บน Mac/Linux ที่ไม่มี `python` ให้ใช้ `python3`)*
@@ -182,7 +185,7 @@
 3. **ดูแผนและคลิกอนุมัติ:** `@lead` เช็กไฟล์จริง หาจุดขัดแย้ง สรุปแผนและเกณฑ์ตรวจรับด้วยภาษาเข้าใจง่าย แล้วเปิดเมนูคลิก **อนุมัติ / ยกเลิก** (หรือ **Option A / Option B**)
 4. **สำรองและลงมือทำ:** หลังคุณคลิกอนุมัติ `@builder` สำรองไฟล์ก่อน แล้วลงมือแก้แบบกระชับ ย้ายโน้ตที่ไม่จำเป็นออกจากโค้ดไปเก็บใน `artifacts/comments/` และตรวจไวยากรณ์เบื้องต้น
 5. **ทดสอบและตรวจรับจริง:** `@verifier` รันเทสต์จริงและตรวจ Diff แบบอ่านอย่างเดียว หากเจอบั๊กเล็กในขอบเขตเดิม `@lead` สั่งแก้ต่อได้ทันที (และหยุดเมื่อพลาดครบ `3` รอบ)
-6. **สรุปงานและดูแลแชตยาว:** `@lead` สรุป `3` ส่วน *(สิ่งที่เกิดขึ้น, สิ่งที่แก้ไข, สิ่งที่ต้องทำต่อ)* พร้อมลิงก์ไฟล์และ `.diff` และเมื่อคุยครบ `10–12` รอบ เมนูคลิกจะเด้งให้เลือกระหว่าง **`/handoff`** (ย้ายหน้าต่างใหม่) หรือ **`/compact`** (ย่อประวัติในหน้าต่างเดิม)
+6. **สรุปงานและดูแลแชตยาว:** `@lead` สรุป `3` ส่วน *(สิ่งที่เกิดขึ้น, สิ่งที่แก้ไข, สิ่งที่ต้องทำต่อ)* พร้อมลิงก์ไฟล์และ `.diff` และเมื่อคุยครบ `10–12` รอบ เมนูคลิกจะเด้งให้เลือกระหว่าง **`/handoff`** (ย้ายหน้าต่างใหม่) หรือคำสั่งระบบ **`/compact`** (พิมพ์ `/compact` ในช่องแชตแล้วกดปุ่ม `Enter` เพื่อย่อประวัติในหน้าต่างเดิม)
 
 ---
 
@@ -196,7 +199,7 @@
 | **2. Python 3.10+** | **จำเป็น** | Python 3.10 ขึ้นไป (`python` บน Windows; `python3` บน Mac/Linux) **ไม่ต้องลงไลบรารีเสริมใดๆ** |
 | **3. โฟลเดอร์โปรเจกต์ชัดเจน** | **จำเป็น** | โฟลเดอร์หลักที่แยกโค้ด (`{{SRC_DIR}}`) และชุดทดสอบ (`{{TEST_DIR}}`) ออกจาก `.agents/`, `artifacts/`, และ `backup/` |
 | **4. คำสั่งรันเทสต์ / ตรวจโค้ด** | **แนะนำอย่างยิ่ง** | คำสั่งรันเทสต์หรือ Linter อย่างน้อย 1 คำสั่ง เพื่อให้ `@verifier` ยืนยันผลได้จริง |
-| **5. Git + `.gitignore`** | **มีจะดีมาก (ไม่บังคับ)** | ช่วยเก็บประวัติโค้ด แต่ถ้าไม่มี Git ระบบ Backup และ `.diff` ก็ทำงานแทนได้; ควรเพิ่ม `backup/`, `artifacts/scratch/`, `.agents/ck/last_alert.log`, และ `.env` ลง `.gitignore` |
+| **5. Git + `.gitignore`** | **มีจะดีมาก (ไม่บังคับ)** | ช่วยเก็บประวัติโค้ด แต่ถ้าไม่มี Git ระบบ Backup และ `.diff` ก็ทำงานแทนได้; ควรเพิ่ม `backup/`, `.agents/ck/last_alert.log`, และ `.env` ลง `.gitignore` (ไฟล์ชั่วคราวใช้โฟลเดอร์ `scratch/` ประจำแชตของ Antigravity ไม่เขียนลง `artifacts/scratch/`) |
 
 ### 5.2 สิ่งที่โปรเจกต์ใหม่ "ต้องเตรียม" (Checklist ครบทั้ง `33` Placeholders)
 
@@ -207,14 +210,14 @@
 |---|---|---|---|
 | `{{PROJECT_NAME}}` | ชื่อโปรเจกต์ | `Acme Billing API` | `AGENTS.md`, `rules.md`, `lead.md`, `verifier.md`, `project-tasks`, `context.json`, templates |
 | `{{PROJECT_OBJECTIVE}}` | เป้าหมายหลักของโปรเจกต์ 1–2 ประโยค | `Build a reliable invoice API that never double-charges` | `AGENTS.md`, `project-tasks`, `project_fanout.py` |
-| `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` | ภาษาที่ใช้คุยและบันทึกเอกสาร *(เลือกผ่านเมนูตอนเปิดครั้งแรกหรือคำสั่ง `set-language` ได้)* | `Thai` หรือ `English` | `AGENTS.md`, `lead.md`, `coding-and-safety.md`, `workflow-ops`, `artifacts/README.md` |
+| `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` | ภาษาที่ใช้คุยและบันทึกเอกสาร *(เลือกผ่านเมนูตอนเปิดครั้งแรกหรือคำสั่ง `set-language` ได้)* | `Thai` หรือ `English` | `AGENTS.md`, `lead.md`, `agents-and-handoff.md`, `coding-and-safety.md`, `workflow-ops`, `artifacts/README.md` |
 
 #### หมวด 2 — เทคโนโลยี โฟลเดอร์หลัก และไฟล์สำคัญ (`6` ตัว)
 | Placeholder | สิ่งที่ต้องเตรียม | ตัวอย่าง | ไฟล์หลักที่ใช้ |
 |---|---|---|---|
 | `{{TECH_STACK}}` | ภาษา เฟรมเวิร์ก และฐานข้อมูล | `Python 3.12, FastAPI, PostgreSQL, React 19` | `AGENTS.md`, `project-tasks` |
 | `{{SRC_DIR}}` | โฟลเดอร์ซอร์สโค้ดหลัก *(เติมใน `workflow_hooks.py` แล้วระบบจะเปิดเกราะบังคับ Backup ให้ทันที)* | `src/` | `AGENTS.md`, `project-tasks`, `workflow_hooks.py` |
-| `{{TEST_DIR}}` | โฟลเดอร์ชุดทดสอบ | `tests/` | `AGENTS.md`, `project-tasks` |
+| `{{TEST_DIR}}` | โฟลเดอร์ชุดทดสอบ | `tests/` | `AGENTS.md`, `project-tasks`, `verify-and-debug` |
 | `{{PROTECTED_PATHS}}` | โฟลเดอร์/ไฟล์ที่ต้อง Backup และขอ `/approve` ก่อนแก้ | `src/, config/, AGENTS.md, .agents/` | `AGENTS.md`, `coding-and-safety.md` |
 | `{{HIGH_BLAST_RADIUS_MODULES}}` | ไฟล์หัวใจสำคัญที่แก้แล้วกระทบทั้งระบบ | `src/config.py, src/auth/jwt.py, src/db/schema.sql` | `coding-and-safety.md`, `project-tasks` |
 | `{{NAMING_CONVENTIONS}}` | รูปแบบการตั้งชื่อไฟล์และโค้ด | `Python snake_case/PascalCase; TS camelCase/PascalCase` | `AGENTS.md` |
@@ -251,7 +254,7 @@
 
 ### 5.3 สิ่งที่โปรเจกต์ใหม่ "ต้องทำ" ทีละขั้น
 
-1. **คัดลอกไฟล์ไปวางที่โฟลเดอร์หลักของโปรเจกต์:** คัดลอก `AGENTS.md`, `MANUAL_TH.md` (และ/หรือ `MANUAL_EN.md`), `.agents/`, และ `artifacts/` ไปวางที่โฟลเดอร์บนสุดของโปรเจกต์ *(หลีกเลี่ยงการวางซ้อนใต้โฟลเดอร์อื่นที่มี `AGENTS.md` อยู่แล้ว)* พร้อมเพิ่ม `backup/`, `artifacts/scratch/`, และ `.agents/ck/last_alert.log` ลง `.gitignore`
+1. **คัดลอกไฟล์ไปวางที่โฟลเดอร์หลักของโปรเจกต์:** คัดลอก `AGENTS.md`, `MANUAL_TH.md` (และ/หรือ `MANUAL_EN.md`), `.agents/`, และ `artifacts/` ไปวางที่โฟลเดอร์บนสุดของโปรเจกต์ *(หลีกเลี่ยงการวางซ้อนใต้โฟลเดอร์อื่นที่มี `AGENTS.md` อยู่แล้ว)* พร้อมเพิ่ม `backup/`, `.agents/ck/last_alert.log`, และ `.env` ลง `.gitignore` *(ไฟล์ชั่วคราวใช้โฟลเดอร์ `scratch/` ประจำแชตของ Antigravity แทน `artifacts/scratch/`)*
 2. **ตรวจ Python บนเครื่อง:** รัน `python --version` (`3.10+`) บน Mac/Linux ที่มีเฉพาะ `python3` ให้แก้ `python` ใน [.agents/hooks.json](./.agents/hooks.json) เป็น `python3` โดยคง `scripts/workflow_hooks.py` ไว้เหมือนเดิม
 3. **เลือกภาษาและเติมช่องว่างที่เหลือ:**
    ```bash
@@ -259,19 +262,19 @@
    python .agents/scripts/workflow_ops.py check-placeholders
    ```
    เติมข้อมูลลง [AGENTS.md](./AGENTS.md), `.agents/rules/*.md`, [.agents/skills/project-tasks/SKILL.md](./.agents/skills/project-tasks/SKILL.md), เอเจนต์/สกิล, [.agents/scripts/workflow_hooks.py](./.agents/scripts/workflow_hooks.py), [.agents/ck/context.json](./.agents/ck/context.json), และ [artifacts/README.md](./artifacts/README.md) (ลบ `.agents/templates/*` ออกได้หากยังไม่ใช้ MCP/งานตั้งเวลา เพื่อให้ `--fail-on-found` ผ่าน `Exit 0`)
-4. **รันตัวตรวจสุขภาพและชุดทดสอบ (ควรได้ `Exit 0` ทั้งหมด):**
+4. **รันตัวตรวจสุขภาพรวมและชุดทดสอบ (ควรได้ `Exit 0` ทั้งหมด):**
    ```bash
    python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found
-   python .agents/scripts/verify_workflow.py
-   python -m unittest discover -s .agents/scripts -p "test_*.py" -v
+   python .agents/scripts/workflow_ops.py inspect --mode quick
    ```
+   *(หรือรันแยกด้วย `verify_workflow.py` และ `python -m unittest discover -s .agents/scripts -p "test_*.py" -v` ก็ได้)*
 5. **เปิดด่านกันจบงานเมื่อมี Alert (ทางเลือก):** เปลี่ยน `"enabled": false` เป็น `true` ที่ `"alert-stop-gate"` ใน [.agents/hooks.json](./.agents/hooks.json)
 6. **ทดลองใช้งานรอบแรก:**
    - เปิดโปรเจกต์ใน Antigravity ยืนยันว่าเริ่มต้นได้เรียบร้อยไม่มี Error
    - ลองถาม *"อธิบายโครงสร้างของโปรเจกต์นี้ให้เข้าใจง่ายๆ"* เพื่อตรวจการตอบสั้น `3–5` ข้อในภาษาที่เลือก
    - ลองสั่งงานเล็ก 1 ชิ้นด้วย `/vibe` → คลิกอนุมัติ → `/finalize` เพื่อเช็กว่าได้ Backup, ผลเทสต์จริง, `.diff` และบันทึกประวัติครบ
-7. **ขยายทีมเมื่อโปรเจกต์ใหญ่ขึ้น:** เริ่มจากทีมเล็ก `4` บทบาทเพื่อประหยัด Token และค่อยเพิ่มเฉพาะเมื่อจำเป็น:
-   - เพิ่ม **`@architect`** (`pro`) เมื่อระบบมีหลายส่วนซับซ้อน
-   - แยก **`@verifier`** เป็น **`@tester`**, **`@reviewer`**, และ **`@code-skeptic`** เมื่อมีการแก้ไขถี่ขึ้น
-   - เพิ่ม **`@risk-guardian`** (`pro`, อ่านอย่างเดียว + สิทธิ์ยับยั้ง) สำหรับงานการเงินหรือข้อมูลอ่อนไหว
-   - หลังเพิ่มไฟล์ `.agents/agents/<name>.md` ให้อัปเดตตาราง/จำนวนเอเจนต์ใน `AGENTS.md` และรัน `python .agents/scripts/verify_workflow.py` (`Exit 0`)
+7. **ขยายทีมเมื่อโปรเจกต์ใหญ่ขึ้น (เน้นกระชับ ไม่เพิ่มบทบาทซ้ำซ้อน):** เริ่มจากทีมเล็ก `4` บทบาทเพื่อประหยัด Token และค่อยเพิ่มเฉพาะเมื่อจำเป็น:
+   - เพิ่ม **`@architect`** (`pro` / `claude-opus-5-5-high` → `gemini-4-neon-xhigh`) เมื่อระบบมีหลายส่วนซับซ้อน
+   - แยก **`@verifier`** เป็น **`@tester`** (`flash` / `gpt-oss-120b-medium` → `gemini-4-neon-low`) และ **`@reviewer`** (`flash` / `claude-sonnet-5-5-medium` ขยายเป็น `claude-opus-5-5-high` ในงานระบบหลัก โดยรวมทั้งการตรวจ Diff และหลักฐานเชิงประจักษ์ไว้ที่ `@reviewer` โดยไม่ต้องแยกบทบาทซ้ำซ้อน)
+   - เพิ่ม **`@risk-guardian`** (`pro`, อ่านอย่างเดียว + สิทธิ์ยับยั้ง / `claude-opus-5-5-high` → `gemini-4-neon-xhigh`) สำหรับงานการเงิน ความปลอดภัย หรือความปลอดภัยชีวิต และเพิ่ม **`@frontend-specialist`** / **`@docs-specialist`** เฉพาะเมื่อมีงาน UI หรือเอกสารมาก
+   - หลังเพิ่มไฟล์ `.agents/agents/<name>.md` ให้อัปเดตตาราง 2 พูลและจำนวนเอเจนต์ใน `AGENTS.md` แล้วรัน `python .agents/scripts/workflow_ops.py inspect --mode quick` (`Exit 0`)

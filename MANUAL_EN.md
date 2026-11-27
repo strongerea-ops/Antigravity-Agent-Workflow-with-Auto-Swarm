@@ -52,7 +52,7 @@ You do **not** need a programming background to use this workflow. It turns your
 | `Stop` alert gate (`alert-stop-gate`, opt-in) | **Hook Script (Automatic when enabled)** | Off by default (`"enabled": false`); safely stops after one retry check (`continuationActive`) to prevent loops. |
 | `verify_workflow.py` & `test_workflow_ops_and_hooks.py` | **CLI Tool (Automatic)** | Returns exact `Exit 0` (pass) or `Exit 1` (fail) for schemas, links, file encoding, syntax, and hook behavior. |
 | `/approve` menus, plain-language default, Circuit Breaker ($N \ge 3$), `Post-Approval Auto-Fix` | **AI Rule Policy** | Followed by the AI via `AGENTS.md` and role prompts, reinforced by your approval clicks. |
-| Main chat model selector, thinking level, opening a new chat window & typing native slash commands (`/compact`, `/plan`, etc.) | **App UI Only** | The AI cannot click app buttons or run Antigravity's native slash commands for you — it gives clickable menus to confirm your choice, runs workflow commands immediately, and tells you when to type a native slash command or click `New Conversation`. |
+| Main chat model selector, thinking/effort level, opening a new chat window & typing native slash commands (`/compact`, `/plan`, etc.) | **App UI Only** | The AI cannot click app buttons, change main-chat effort (recommended UI default: **`High`**; switch to **`Extra High`** temporarily for heavy analysis), or run Antigravity's native slash commands — it gives clickable menus to confirm your choice, runs workflow triggers immediately, and tells you when to type a native slash command (e.g., `/compact` + `Enter`) or click `New Conversation`. |
 
 ---
 
@@ -65,11 +65,11 @@ You do **not** need a programming background to use this workflow. It turns your
    - **Long-chat memory choices (`/handoff` vs. `/compact` vs. continue as-is)**
    - **Recommended next commands** (e.g., `/vibe`, `/design`, `/test`, `/debug`, `/more-detail`, or native commands like `/plan` and `/grill-me`) — clearly distinguishing workflow commands that run right after clicking from native UI commands you type in chat.
 3. **Short Answers by Default, Full Detail When Needed:** General questions return `3–5` plain bullets (`no-code / no-detail`) with no overwhelming code dumps. Full detail turns on automatically during planning, editing code, or when you ask for `/more-detail`. Pre-decision analyses close with a clear **Action Recommendation Verdict** (whether you should proceed and why).
-4. **Long-Chat Protection (`/compact` + `/handoff` + Fast Startup):** Skills load only when needed and large files are read in slices (`<= 300` lines). At `10–12` turns (`~35` calls) or `<CONTEXT_SUMMARY>`, a clickable menu lets you pick **`/handoff`** (creates `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + ready-to-paste prompt for a fresh window automatically picked up by `SessionStart`) or **`/compact`** (shrinks the current window).
-5. **Smart 3-Level Sizing + Auto-Swarm Safety:**
-   - **Tier 0 In-line:** Tiny 1–2 line fixes or quick questions (`<= 3` reads) finish right in chat.
-   - **Tier 1 `invoke_subagent`:** Focused tasks (`@researcher`, `@builder`, `@verifier`) or `1–8` edited files.
-   - **Tier 2 `swarm` / `run_workflow`:** `>= 9` edited files or `>= 2` separate workstreams scale to a team (`Pool C` Claude/GPT to `0%` first → `Pool B` `gemini-4-argon-*` → `Pool A` `gemini-4-neon-*`, halting Auto-Swarm below `20%` fallback quota). On dirty Git working trees (unsaved local changes), workers strictly use `workspace:"inherit"` with non-overlapping files so uncommitted work is never lost.
+4. **Long-Chat Protection (`/handoff` + Native `/compact` + Fast Startup):** Skills load only when needed and large files are read in slices (`<= 300` lines). At `10–12` turns (`~35` calls) or `<CONTEXT_SUMMARY>`, a clickable menu lets you pick **`/handoff`** (creates `.agents/ck/HANDOFF.md` + `artifacts/handoffs/` + ready-to-paste prompt for a fresh window automatically picked up by `SessionStart`) or native **`/compact`** (type `/compact` in chat and press `Enter` to shrink the current window).
+5. **Smart 3-Level Sizing + 2-Pool Auto-Swarm Safety:**
+   - **Tier 0 In-line:** Tiny 1–2 line fixes or quick questions (`<= 3` reads) finish right in chat (main chat UI Effort: `High` default; `Extra High` temporarily for heavy analysis).
+   - **Tier 1 `invoke_subagent`:** Focused tasks (`@researcher`, `@builder`, `@verifier`) or **`1–10` edited files**.
+   - **Tier 2 `swarm` / `run_workflow`:** **`>= 11` edited files** (excluding `artifacts/`/`.agents/ck/`) or **`>= 2` clearly disjoint workstreams** explicitly invoke `swarm` per `plan-and-build/SKILL.md` across **2 Pools** (exhaust **`Claude and GPT Models`** to `0%` first → fall back to **`Gemini Models`** preferring `gemini-pro-orchestrator-neon` and `gemini-4-neon-*`, halting Auto-Swarm below `20%` fallback quota; **Argon pool retired**). On dirty Git working trees (unsaved local changes), workers strictly use `workspace:"inherit"` with non-overlapping files so uncommitted work is never lost, and never edit code before `/approve`.
 6. **Clean Code Hygiene, Safe Retention & Permanent Learning:** Pre-Action Backup (auto-pruned after `30` days) + `SHA-256` verified `rollback` + `-U1` Diff (works even without Git) + unified `inspect` gates; `artifacts/` are user-managed reference materials (**never auto-deleted**, protected by `PreToolUse` hook — if an artifact conflicts with current rules, the assistant alerts you with options); temporary one-off scripts live in Antigravity's built-in session `scratch/` folder (not workspace `artifacts/scratch/`) while reusable scripts live in `artifacts/tools/`; Read-Only `@verifier`, Self-Mistake Governance, Zero In-Code Comments (`artifacts/comments/`), `3–7` day unresolved bug reminders, 3-part Evidence-Based Objection, Attack the Premise ($N=2$), Circuit Breaker ($N \ge 3$), and Compound Learning (`/compound`).
 7. **Optional Power Add-Ons:** Ready-to-adapt parallel Python workflow ([project_fanout.py](./.agents/workflows/project_fanout.py) + [workflow.json](./.agents/workflows/workflow.json)), MCP server example ([mcp_config.example.json](./.agents/templates/mcp_config.example.json)), and scheduled background cron example ([sidecar.schedule.example.json](./.agents/templates/sidecar.schedule.example.json)).
 
@@ -100,7 +100,7 @@ You do **not** need a programming background to use this workflow. It turns your
 | Command | Plain-English Purpose |
 |---|---|
 | `/plan` | Enter careful step-by-step planning before making changes. |
-| `/compact` | Compress older chat messages to free up memory in the current window. |
+| `/compact` | Type `/compact` in chat and press `Enter` to compress older messages and free memory in the current window. |
 | `/goal` | Keep working thoroughly on a big task until the goal is completely done. |
 | `/schedule` | Set a one-time timer or recurring reminder inside the current session. |
 | `/automation` | Guided setup for a recurring background task (runs on a schedule). |
@@ -127,19 +127,22 @@ You do **not** need a programming background to use this workflow. It turns your
 | `/finalize` | `@lead` (`plan-and-build`) | Verify every success criterion, save `.diff`, check `/compound`, and log the turn. |
 | `/compound` | `@lead` (`verify-and-debug`) | Turn a solved non-trivial bug into a permanent safeguard (`Test/Lint -> Rule -> Solution Doc`). |
 | `/ck` | `@lead` (`workflow-ops`) | Save or inspect the Rolling `15` Checkpoints in `.agents/ck/`. |
-| `/handoff` | `@lead` (`workflow-ops`) | Offered in a clickable menu alongside `/compact`: creates `.agents/ck/HANDOFF.md`, archives under `artifacts/handoffs/`, marks `HANDOFF_READY` for `SessionStart`, and prints a Ready-to-Paste Starter Prompt for a fresh chat window. |
+| `/handoff` | `@lead` (`workflow-ops`) | Offered in a clickable menu alongside native `/compact` *(type `/compact` + `Enter`)*: creates `.agents/ck/HANDOFF.md`, archives under `artifacts/handoffs/`, marks `HANDOFF_READY` for `SessionStart`, and prints a Ready-to-Paste Starter Prompt for a fresh chat window. |
 | `/concept`, `/no-code`, `/no-detail` | `@lead` (`AGENTS.md` §0) | Force a short `3–5` bullet plain-language explanation with no code snippets or untouched file lists. |
 | `/more-detail` | `@lead` (`AGENTS.md` §0) | Show full file paths, line numbers, code/config details, and full command outputs. |
-| `/refactor-agents` | `@lead` (`workflow-ops`) | Audit and tidy `AGENTS.md` and `.agents/` while keeping budgets and schemas clean. |
+| `/refactor-agents` | `@lead` (`workflow-ops`) | Audit and tidy `AGENTS.md` and `.agents/` while keeping budgets, 2-pool model rules, and schemas clean. |
 
-### C. AI Team Roles (`@role`)
+### C. AI Team Roles (`@role`) & 2-Pool Swarm Model Matrix
 
-| Role | Tier 1 Model | Can Edit Files? | Shell Policy | Best Used For |
-|---|---|---|---|---|
-| `@lead` | `pro` | Yes (Coordinator) | `auto` | Planning, checking conflicts, clickable `/approve` menus, and final summaries. |
-| `@builder` | `flash` | Yes (Approved Scope Only) | `auto` | Backing up and making approved edits cleanly. |
-| `@verifier` | `flash` | **No (Read-Only)** | `sandbox` | Running real tests, investigating bugs, and auditing diffs safely. |
-| `@researcher` | `flash_lite` | **No (Read-Only)** | `off` | Fast, low-cost codebase exploration and web documentation lookups. |
+| Role | Primary Swarm (`Claude and GPT Models`) | Fallback Swarm (`Gemini Models`) | Tier 1 Model | Can Edit Files? | Shell Policy | Best Used For |
+|---|---|---|---|---|---|---|
+| **Tier 0 (Main Chat)** | Main Chat UI Dropdown *(default `High`; `Extra High` for heavy analysis)* | Main Chat UI Dropdown | — | Coordinator | — | 1–2 line fixes, `<= 3` reads, quick `/concept` Q&A. |
+| **`@lead`** | `claude-opus-5-5-high` *(or `claude-sonnet-5-5-high`)* | `gemini-pro-orchestrator-neon` / `gemini-4-neon-xhigh` | `pro` | Yes (Coordinator) | `auto` | Planning, checking conflicts, clickable `/approve` menus, and final summaries. |
+| **`@builder`** | `claude-sonnet-5-5-medium` *(complex/core → `high`)* | `gemini-4-neon-medium` → `high` / `gemini-4-hydrogen-medium` | `flash` | Yes (Approved Scope Only) | `auto` | Backing up and making approved edits cleanly + `/simplify`. |
+| **`@verifier`** | `gpt-oss-120b-medium` *(RCA/critical diff → `claude-sonnet-5-5-high`; high-risk audit → `claude-opus-5-5-high`)* | `gemini-4-neon-low` → `high` / `gemini-4-hydrogen-low` | `flash` | **No (Read-Only)** | `sandbox` | Running real tests, investigating bugs, and auditing diffs safely. |
+| **`@researcher`** | `gpt-oss-120b-medium` *(deep cross-module → `claude-sonnet-5-5-low`)* | `gemini-4-neon-low` / `gemini-4-hydrogen-low` | `flash_lite` | **No (Read-Only)** | `off` | Fast, low-cost codebase exploration and web documentation lookups. |
+
+*(Swarm Pool Rule: Exhaust **`Claude and GPT Models`** to `0%` first before falling back to **`Gemini Models`**; apply Auto Effort per role/complexity; halt Auto-Swarm if fallback pool `< 20%`.)*
 
 ### D. Bundled Python CLI Commands
 *(Run from your project's main folder; use `python3` on Mac/Linux if `python` is not available)*
@@ -182,7 +185,7 @@ You do **not** need a programming background to use this workflow. It turns your
 3. **Review Plan & Click Approve:** `@lead` checks your files for conflicts, summarizes the plan and success criteria in plain words, and shows a clickable **Approve / Cancel** (or **Option A / Option B**) menu.
 4. **Backup & Build:** After you click Approve, `@builder` saves a Pre-Action Backup, makes the minimal edits, cleans up any stray notes into `artifacts/comments/`, and runs syntax checks.
 5. **Real Verification:** `@verifier` runs real tests and inspects the change diff in Read-Only mode. If a small in-scope bug appears, `@lead` can fix it right away without re-asking `/approve` (stopping cleanly if stuck `3` times).
-6. **Wrap Up & Long-Chat Care:** `@lead` reports *(1) What happened, (2) What changed, (3) Next steps* with clickable file links and a `.diff`. When the chat reaches `10–12` turns, a clickable menu offers **`/handoff`** (start fresh) or **`/compact`** (stay here).
+6. **Wrap Up & Long-Chat Care:** `@lead` reports *(1) What happened, (2) What changed, (3) Next steps* with clickable file links and a `.diff`. When the chat reaches `10–12` turns, a clickable menu offers **`/handoff`** (start fresh) or native **`/compact`** (type `/compact` in chat and press `Enter` to stay in this window).
 
 ---
 
@@ -196,7 +199,7 @@ You do **not** need a programming background to use this workflow. It turns your
 | **2. Python 3.10+** | **Required** | Standard Python 3.10+ installed (`python` on Windows; `python3` on Mac/Linux). **Zero extra packages** required. |
 | **3. Clear Project Folder** | **Required** | A top-level project folder separating your app code (`{{SRC_DIR}}`) and tests (`{{TEST_DIR}}`) from `.agents/`, `artifacts/`, and `backup/`. |
 | **4. Test / Lint Command** | **Recommended** | At least one real test or check command (`{{TEST_COMMAND}}` / `{{LINT_COMMAND}}`) so `@verifier` can prove changes work. |
-| **5. Git + `.gitignore`** | **Optional** | Helpful for history, though backups and `.diff` work without Git. Add `backup/`, `artifacts/scratch/`, `.agents/ck/last_alert.log`, and `.env` to `.gitignore`. |
+| **5. Git + `.gitignore`** | **Optional** | Helpful for history, though backups and `.diff` work without Git. Add `backup/`, `.agents/ck/last_alert.log`, and `.env` to `.gitignore` (temporary scripts go in Antigravity's built-in session `scratch/`, never workspace `artifacts/scratch/`). |
 
 ### 5.2 What a New Project NEEDS TO PREPARE (Complete `33`-Placeholder Checklist)
 
@@ -207,14 +210,14 @@ Gather the details below before filling in the blanks. Each item matches one of 
 |---|---|---|---|
 | `{{PROJECT_NAME}}` | Your project's name | `Acme Billing API` | `AGENTS.md`, `rules.md`, `lead.md`, `verifier.md`, `project-tasks`, `context.json`, templates |
 | `{{PROJECT_OBJECTIVE}}` | 1–2 sentences describing what the project does | `Build a reliable invoice API that never double-charges` | `AGENTS.md`, `project-tasks`, `project_fanout.py` |
-| `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` | Your preferred chat & notes language *(can be set via first-run menu or `set-language`)* | `English` or `Thai` | `AGENTS.md`, `lead.md`, `coding-and-safety.md`, `workflow-ops`, `artifacts/README.md` |
+| `{{CHAT_AND_ARTIFACTS_LANGUAGE}}` | Your preferred chat & notes language *(can be set via first-run menu or `set-language`)* | `English` or `Thai` | `AGENTS.md`, `lead.md`, `agents-and-handoff.md`, `coding-and-safety.md`, `workflow-ops`, `artifacts/README.md` |
 
 #### Group 2 — Stack, Folders & High-Risk Files (`6` placeholders)
 | Placeholder | What to Prepare | Example | Primary Files |
 |---|---|---|---|
 | `{{TECH_STACK}}` | Languages, frameworks, and databases used | `Python 3.12, FastAPI, PostgreSQL, React 19` | `AGENTS.md`, `project-tasks` |
 | `{{SRC_DIR}}` | Main app source folder *(turns on automatic backup guard in `workflow_hooks.py` once filled)* | `src/` | `AGENTS.md`, `project-tasks`, `workflow_hooks.py` |
-| `{{TEST_DIR}}` | Automated test folder | `tests/` | `AGENTS.md`, `project-tasks` |
+| `{{TEST_DIR}}` | Automated test folder | `tests/` | `AGENTS.md`, `project-tasks`, `verify-and-debug` |
 | `{{PROTECTED_PATHS}}` | Folders/files requiring backup + `/approve` | `src/, config/, AGENTS.md, .agents/` | `AGENTS.md`, `coding-and-safety.md` |
 | `{{HIGH_BLAST_RADIUS_MODULES}}` | Core files where a mistake affects the whole app | `src/config.py, src/auth/jwt.py, src/db/schema.sql` | `coding-and-safety.md`, `project-tasks` |
 | `{{NAMING_CONVENTIONS}}` | Preferred naming style for files and code | `Python snake_case/PascalCase; TS camelCase/PascalCase` | `AGENTS.md` |
@@ -251,7 +254,7 @@ Gather the details below before filling in the blanks. Each item matches one of 
 
 ### 5.3 What a New Project NEEDS TO DO (Step-by-Step)
 
-1. **Copy the Workflow Into Your Project's Top Folder:** Copy `AGENTS.md`, `MANUAL_EN.md` (and/or `MANUAL_TH.md`), `.agents/`, and `artifacts/` directly into your project's root folder (not inside another folder that already has `AGENTS.md`). Add `backup/`, `artifacts/scratch/`, and `.agents/ck/last_alert.log` to `.gitignore`.
+1. **Copy the Workflow Into Your Project's Top Folder:** Copy `AGENTS.md`, `MANUAL_EN.md` (and/or `MANUAL_TH.md`), `.agents/`, and `artifacts/` directly into your project's root folder (not inside another folder that already has `AGENTS.md`). Add `backup/`, `.agents/ck/last_alert.log`, and `.env` to `.gitignore` (store one-off scripts in Antigravity's built-in session `scratch/` folder, not workspace `artifacts/scratch/`).
 2. **Check Python:** Run `python --version` (`3.10+`). On Mac/Linux where only `python3` exists, change `python` to `python3` in [.agents/hooks.json](./.agents/hooks.json), keeping `scripts/workflow_hooks.py` relative to `.agents/`.
 3. **Pick Your Language & Fill the Blanks:**
    ```bash
@@ -259,19 +262,19 @@ Gather the details below before filling in the blanks. Each item matches one of 
    python .agents/scripts/workflow_ops.py check-placeholders
    ```
    Fill in [AGENTS.md](./AGENTS.md), `.agents/rules/*.md`, [.agents/skills/project-tasks/SKILL.md](./.agents/skills/project-tasks/SKILL.md), the agent/skill command references, [.agents/scripts/workflow_hooks.py](./.agents/scripts/workflow_hooks.py), [.agents/ck/context.json](./.agents/ck/context.json), and [artifacts/README.md](./artifacts/README.md). Delete `.agents/templates/*` if you do not need MCP or scheduled sidecars yet so `--fail-on-found` passes cleanly.
-4. **Run the Health Check & Self-Tests (All Should Pass With `Exit 0`):**
+4. **Run the Unified Health Check & Self-Tests (All Should Pass With `Exit 0`):**
    ```bash
    python .agents/scripts/workflow_ops.py check-placeholders --fail-on-found
-   python .agents/scripts/verify_workflow.py
-   python -m unittest discover -s .agents/scripts -p "test_*.py" -v
+   python .agents/scripts/workflow_ops.py inspect --mode quick
    ```
+   *(You can also run `verify_workflow.py` and `python -m unittest discover -s .agents/scripts -p "test_*.py" -v` individually.)*
 5. **Optional Strict Stop Guard:** To block ending a turn while `.agents/ck/last_alert.log` still has an alert, change `"enabled": false` to `true` on `"alert-stop-gate"` inside [.agents/hooks.json](./.agents/hooks.json).
 6. **Try a Quick First Session:**
    - Open your project in Antigravity and verify startup completes cleanly.
    - Ask *"Explain how this project is organized"* to confirm clear, jargon-free `3–5` bullet answers in your language.
    - Run one small task through `/vibe` → click Approve → `/finalize`, confirming backup, tests, `.diff`, and saved history.
-7. **Grow the Team Only When Needed:** Start lean with `4` roles (`lead`, `builder`, `verifier`, `researcher`) and add specialists only when your project outgrows them:
-   - Add **`@architect`** (`pro`) for complex multi-service designs.
-   - Split **`@verifier`** into **`@tester`**, **`@reviewer`**, and **`@code-skeptic`** as change volume grows.
-   - Add **`@risk-guardian`** (`pro`, Read-Only Veto) for finance, security, or sensitive-data apps.
-   - After adding any `.agents/agents/<name>.md`, update the team table and count in `AGENTS.md` and run `python .agents/scripts/verify_workflow.py` (`Exit 0`).
+7. **Grow the Team Only When Needed (Keep It Lean):** Start with `4` roles (`lead`, `builder`, `verifier`, `researcher`) and add specialists only when your project truly needs them:
+   - Add **`@architect`** (`pro` / `claude-opus-5-5-high` → `gemini-4-neon-xhigh`) for complex multi-service designs.
+   - Split **`@verifier`** into **`@tester`** (`flash` / `gpt-oss-120b-medium` → `gemini-4-neon-low`) and **`@reviewer`** (`flash` / `claude-sonnet-5-5-medium`, escalating to `claude-opus-5-5-high` on critical/core diffs, owning both static diff and empirical proof checks without duplicating a separate skeptic role).
+   - Add **`@risk-guardian`** (`pro`, Read-Only Veto / `claude-opus-5-5-high` → `gemini-4-neon-xhigh`) for finance, security, or life-safety apps, and optionally **`@frontend-specialist`** or **`@docs-specialist`** for UI/documentation-heavy repositories.
+   - After adding any `.agents/agents/<name>.md`, update the 2-Pool team table and count in `AGENTS.md` and run `python .agents/scripts/workflow_ops.py inspect --mode quick` (`Exit 0`).
